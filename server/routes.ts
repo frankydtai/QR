@@ -1,30 +1,15 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
 import { qrGenerationSchema } from "@shared/schema";
-import { exec } from "child_process";
-import { promisify } from "util";
+import { spawn } from "child_process";
 import fs from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
 
-const execAsync = promisify(exec);
-
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Auth middleware - using Replit Auth integration
-  await setupAuth(app);
-
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
+  // Health check endpoint
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', message: 'QR Generator API is running' });
   });
 
   // QR Code generation endpoint
@@ -47,15 +32,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await fs.mkdir(tempDir, { recursive: true });
       
       try {
-        // Build amzqr command with fixed parameters: v=10, l=H, no -c flag
-        let command = `cd ${tempDir} && python -m amzqr "${text}" -v 10 -l H -n qr_output.png`;
+        // Build amzqr command arguments with fixed parameters: v=10, l=H, no -c flag
+        const args = [text, '-v', '10', '-l', 'H', '-n', 'qr_output.png'];
         
         // Add optional parameters
         if (contrast !== undefined) {
-          command += ` -con ${contrast}`;
+          args.push('-con', contrast.toString());
         }
         if (brightness !== undefined) {
-          command += ` -bri ${brightness}`;
+          args.push('-bri', brightness.toString());
         }
         
         // Handle picture file if provided (base64 encoded)
@@ -63,17 +48,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const pictureBuffer = Buffer.from(picture, 'base64');
           const picturePath = path.join(tempDir, 'picture.png');
           await fs.writeFile(picturePath, pictureBuffer);
-          command += ` -p picture.png`;
+          args.push('-p', 'picture.png');
         }
 
-        console.log(`Executing QR generation command: ${command}`);
+        console.log(`Executing QR generation with args:`, args);
         
-        // Execute amzqr command
-        const { stdout, stderr } = await execAsync(command);
-        
-        if (stderr) {
-          console.warn(`amzqr stderr: ${stderr}`);
-        }
+        // Execute amzqr command safely with spawn
+        await new Promise<void>((resolve, reject) => {
+          const process = spawn('amzqr', args, { 
+            cwd: tempDir,
+            stdio: ['ignore', 'pipe', 'pipe']
+          });
+          
+          let stdout = '';
+          let stderr = '';
+          
+          process.stdout?.on('data', (data) => {
+            stdout += data.toString();
+          });
+          
+          process.stderr?.on('data', (data) => {
+            stderr += data.toString();
+          });
+          
+          process.on('close', (code) => {
+            if (code !== 0) {
+              console.error(`amzqr process exited with code ${code}`);
+              console.error(`stderr: ${stderr}`);
+              reject(new Error(`QR generation failed with code ${code}: ${stderr}`));
+            } else {
+              if (stderr) {
+                console.warn(`amzqr stderr: ${stderr}`);
+              }
+              resolve();
+            }
+          });
+          
+          process.on('error', (error) => {
+            console.error(`Failed to start amzqr process:`, error);
+            reject(error);
+          });
+        });
 
         // Read the generated QR code
         const qrPath = path.join(tempDir, 'qr_output.png');

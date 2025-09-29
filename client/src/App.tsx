@@ -5,8 +5,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { useAuth } from "@/hooks/useAuth";
-import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
 import QRModelSelector, { type QRStyle } from "@/components/QRModelSelector";
 import ImageUploader from "@/components/ImageUploader";
@@ -16,17 +14,9 @@ import QRGenerator from "@/components/QRGenerator";
 type Step = 1 | 2 | 3 | 4;
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
-
   return (
     <Switch>
-      {isLoading || !isAuthenticated ? (
-        <Route path="/" component={Landing} />
-      ) : (
-        <>
-          <Route path="/" component={QRCodeApp} />
-        </>
-      )}
+      <Route path="/" component={QRCodeApp} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -64,10 +54,6 @@ function QRCodeApp() {
     if (currentStep > 1) {
       setCurrentStep((prev) => (prev - 1) as Step);
     }
-  };
-
-  const handleLogout = () => {
-    window.location.href = '/api/logout';
   };
 
   const renderCurrentStep = () => {
@@ -115,19 +101,8 @@ function QRCodeApp() {
 
   return (
     <div className="min-h-screen">
-      {/* Header with logout */}
-      <header className="absolute top-4 right-4 z-10">
-        <button
-          onClick={handleLogout}
-          className="text-white/80 hover:text-white text-sm transition-colors"
-          data-testid="button-logout"
-        >
-          Logout
-        </button>
-      </header>
-
       {/* Main Content */}
-      <main className="pt-12 pb-6">
+      <main className="pt-6 pb-6">
         <div className="px-4">
           {renderCurrentStep()}
         </div>
