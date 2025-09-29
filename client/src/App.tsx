@@ -37,13 +37,17 @@ function QRCodeApp() {
   const [selectedStyle, setSelectedStyle] = useState<QRStyle | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [url, setUrl] = useState<string>('');
+  const [contrast, setContrast] = useState<number>(0);
+  const [brightness, setBrightness] = useState<number>(0);
 
   const handleStyleSelect = (style: QRStyle) => {
     setSelectedStyle(style);
   };
 
-  const handleImageSelect = (file: File | null) => {
+  const handleImageSelect = (file: File | null, contrastVal?: number, brightnessVal?: number) => {
     setSelectedImage(file);
+    if (contrastVal !== undefined) setContrast(contrastVal);
+    if (brightnessVal !== undefined) setBrightness(brightnessVal);
   };
 
   const handleURLChange = (newUrl: string) => {
@@ -99,6 +103,8 @@ function QRCodeApp() {
             url={url}
             style={selectedStyle!}
             image={selectedImage}
+            contrast={contrast}
+            brightness={brightness}
             onBack={goToPreviousStep}
           />
         );
