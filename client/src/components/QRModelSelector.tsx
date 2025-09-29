@@ -43,46 +43,41 @@ const qrStyles: QRStyle[] = [
 
 interface QRModelSelectorProps {
   onStyleSelect: (style: QRStyle) => void;
-  onContinue: () => void;
+  onBack?: () => void;
 }
 
-export default function QRModelSelector({ onStyleSelect, onContinue }: QRModelSelectorProps) {
-  const [selectedStyle, setSelectedStyle] = useState<QRStyle | null>(null);
-
+export default function QRModelSelector({ onStyleSelect, onBack }: QRModelSelectorProps) {
   const handleStyleSelect = (style: QRStyle) => {
-    setSelectedStyle(style);
     onStyleSelect(style);
     console.log('QR style selected:', style.name);
   };
 
   return (
     <div className="w-full max-w-md mx-auto p-6">
+      {onBack && (
+        <button 
+          onClick={onBack}
+          className="mb-6 text-white/80 hover:text-white transition-colors"
+          data-testid="button-back"
+        >
+          ← Back
+        </button>
+      )}
+      
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-semibold mb-2" data-testid="page-title">
-          Choose QR Style
+        <h1 className="text-2xl font-light mb-2 text-white" data-testid="page-title">
+          Choose Style
         </h1>
-        <p className="text-muted-foreground">
-          Select a design style for your QR code
-        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-8">
         {qrStyles.map((style) => (
           <Card
             key={style.id}
-            className={`p-4 cursor-pointer hover-elevate transition-all duration-200 relative ${
-              selectedStyle?.id === style.id 
-                ? 'ring-2 ring-primary ring-offset-2' 
-                : ''
-            }`}
+            className="p-4 cursor-pointer hover-elevate transition-all duration-200 relative bg-white/10 backdrop-blur-sm border border-white/20"
             onClick={() => handleStyleSelect(style)}
             data-testid={`style-option-${style.id}`}
           >
-            {selectedStyle?.id === style.id && (
-              <div className="absolute -top-2 -right-2 bg-primary rounded-full p-1">
-                <Check className="w-4 h-4 text-primary-foreground" />
-              </div>
-            )}
             
             <div className="aspect-square mb-3 overflow-hidden rounded-md">
               <img 
@@ -93,21 +88,12 @@ export default function QRModelSelector({ onStyleSelect, onContinue }: QRModelSe
             </div>
             
             <div className="text-center">
-              <h3 className="font-medium text-sm mb-1">{style.name}</h3>
-              <p className="text-xs text-muted-foreground">{style.description}</p>
+              <h3 className="font-medium text-sm text-white">{style.name}</h3>
             </div>
           </Card>
         ))}
       </div>
 
-      <Button
-        onClick={onContinue}
-        disabled={!selectedStyle}
-        className="w-full h-12"
-        data-testid="button-continue"
-      >
-        Continue
-      </Button>
     </div>
   );
 }

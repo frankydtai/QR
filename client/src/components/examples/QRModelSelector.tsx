@@ -5,7 +5,6 @@ export default function QRModelSelectorExample() {
     <div className="min-h-screen bg-background">
       <QRModelSelector 
         onStyleSelect={(style) => console.log('Style selected:', style)}
-        onContinue={() => console.log('Continue clicked')}
       />
     </div>
   );

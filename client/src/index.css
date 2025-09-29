@@ -15,6 +15,7 @@
   --elevate-2: rgba(0,0,0, .08);
 
   --background: 0 0% 98%;
+  --gradient-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 
   --foreground: 222 84% 5%;
 
@@ -133,6 +134,7 @@
   --elevate-2: rgba(255,255,255, .09);
 
   --background: 222 84% 5%;
+  --gradient-bg: linear-gradient(135deg, #4c1d95 0%, #581c87 100%);
 
   --foreground: 210 40% 98%;
 
@@ -212,7 +214,9 @@
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased text-foreground;
+    background: var(--gradient-bg);
+    min-height: 100vh;
   }
 }
 

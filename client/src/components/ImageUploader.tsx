@@ -55,39 +55,41 @@ export default function ImageUploader({ onImageSelect, onContinue, onBack }: Ima
 
   return (
     <div className="w-full max-w-md mx-auto p-6">
+      <button 
+        onClick={onBack}
+        className="mb-6 text-white/80 hover:text-white transition-colors"
+        data-testid="button-back"
+      >
+        ← Back
+      </button>
+      
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-semibold mb-2" data-testid="page-title">
+        <h1 className="text-2xl font-light mb-2 text-white" data-testid="page-title">
           Upload Image
         </h1>
-        <p className="text-muted-foreground">
-          Add an image to include in your QR code
-        </p>
       </div>
 
       <div className="mb-8">
         {!previewUrl ? (
           <Card
-            className="border-2 border-dashed border-muted-foreground/25 p-8 text-center hover-elevate cursor-pointer transition-colors"
+            className="border-2 border-dashed border-white/30 p-8 text-center hover-elevate cursor-pointer transition-colors bg-white/10 backdrop-blur-sm"
             onDrop={handleDrop}
             onDragOver={(e) => e.preventDefault()}
             onClick={() => fileInputRef.current?.click()}
             data-testid="upload-zone"
           >
             <div className="flex flex-col items-center">
-              <div className="w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-4">
-                <Upload className="w-6 h-6 text-muted-foreground" />
+              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mb-4">
+                <Upload className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-medium mb-2">Tap to upload</h3>
-              <p className="text-sm text-muted-foreground mb-4">
+              <h3 className="font-medium mb-2 text-white">Tap to upload</h3>
+              <p className="text-sm text-white/80">
                 PNG, JPG or SVG files
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Or drag and drop files here
               </p>
             </div>
           </Card>
         ) : (
-          <Card className="p-4">
+          <Card className="p-4 bg-white/10 backdrop-blur-sm border border-white/20">
             <div className="relative">
               <div className="aspect-square w-32 mx-auto mb-4 overflow-hidden rounded-lg">
                 <img 
@@ -108,8 +110,8 @@ export default function ImageUploader({ onImageSelect, onContinue, onBack }: Ima
               </Button>
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium truncate">{selectedImage?.name}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm font-medium truncate text-white">{selectedImage?.name}</p>
+              <p className="text-xs text-white/60">
                 {selectedImage && (selectedImage.size / 1024).toFixed(1)} KB
               </p>
             </div>
@@ -126,23 +128,13 @@ export default function ImageUploader({ onImageSelect, onContinue, onBack }: Ima
         />
       </div>
 
-      <div className="flex gap-3">
-        <Button
-          variant="outline"
-          onClick={onBack}
-          className="flex-1 h-12"
-          data-testid="button-back"
-        >
-          Back
-        </Button>
-        <Button
-          onClick={onContinue}
-          className="flex-1 h-12"
-          data-testid="button-continue"
-        >
-          Continue
-        </Button>
-      </div>
+      <Button
+        onClick={onContinue}
+        className="w-full h-12 bg-white/20 border border-white/30 text-white hover:bg-white/30"
+        data-testid="button-continue"
+      >
+        Continue
+      </Button>
     </div>
   );
 }

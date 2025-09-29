@@ -9,10 +9,10 @@ interface QRGeneratorProps {
   url: string;
   style: QRStyle;
   image?: File | null;
-  onStartOver: () => void;
+  onBack: () => void;
 }
 
-export default function QRGenerator({ url, style, image, onStartOver }: QRGeneratorProps) {
+export default function QRGenerator({ url, style, image, onBack }: QRGeneratorProps) {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -114,16 +114,21 @@ export default function QRGenerator({ url, style, image, onStartOver }: QRGenera
 
   return (
     <div className="w-full max-w-md mx-auto p-6">
+      <button 
+        onClick={onBack}
+        className="mb-6 text-white/80 hover:text-white transition-colors"
+        data-testid="button-back"
+      >
+        ← Back
+      </button>
+      
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-semibold mb-2" data-testid="page-title">
+        <h1 className="text-2xl font-light mb-2 text-white" data-testid="page-title">
           Your QR Code
         </h1>
-        <p className="text-muted-foreground">
-          Scan to visit {new URL(url).hostname}
-        </p>
       </div>
 
-      <Card className="p-6 mb-8">
+      <Card className="p-6 mb-8 bg-white/10 backdrop-blur-sm border border-white/20">
         <div className="text-center">
           {isGenerating ? (
             <div className="aspect-square w-full max-w-[280px] mx-auto flex items-center justify-center bg-muted rounded-lg">
@@ -144,52 +149,18 @@ export default function QRGenerator({ url, style, image, onStartOver }: QRGenera
             </div>
           )}
           
-          <div className="mt-4 p-3 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground mb-1">Style:</p>
-            <p className="font-medium">{style.name}</p>
-            {image && (
-              <>
-                <p className="text-sm text-muted-foreground mt-2 mb-1">Image:</p>
-                <p className="font-medium text-sm">{image.name}</p>
-              </>
-            )}
-          </div>
         </div>
       </Card>
 
-      <div className="space-y-3">
-        <div className="flex gap-3">
-          <Button
-            onClick={handleShare}
-            className="flex-1 h-12"
-            disabled={!qrCodeUrl}
-            data-testid="button-share"
-          >
-            <Share2 className="w-4 h-4 mr-2" />
-            Share
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleDownload}
-            className="flex-1 h-12"
-            disabled={!qrCodeUrl}
-            data-testid="button-download"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Download
-          </Button>
-        </div>
-        
-        <Button
-          variant="outline"
-          onClick={onStartOver}
-          className="w-full h-12"
-          data-testid="button-start-over"
-        >
-          <RotateCcw className="w-4 h-4 mr-2" />
-          Create Another
-        </Button>
-      </div>
+      <Button
+        onClick={handleShare}
+        className="w-full h-12 bg-white/20 border border-white/30 text-white hover:bg-white/30"
+        disabled={!qrCodeUrl}
+        data-testid="button-share"
+      >
+        <Share2 className="w-4 h-4 mr-2" />
+        Share
+      </Button>
     </div>
   );
 }

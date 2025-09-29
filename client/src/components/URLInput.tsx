@@ -66,17 +66,22 @@ export default function URLInput({ onURLChange, onContinue, onBack }: URLInputPr
 
   return (
     <div className="w-full max-w-md mx-auto p-6">
+      <button 
+        onClick={onBack}
+        className="mb-6 text-white/80 hover:text-white transition-colors"
+        data-testid="button-back"
+      >
+        ← Back
+      </button>
+      
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-semibold mb-2" data-testid="page-title">
+        <h1 className="text-2xl font-light mb-2 text-white" data-testid="page-title">
           Enter URL
         </h1>
-        <p className="text-muted-foreground">
-          What should your QR code link to?
-        </p>
       </div>
 
       <div className="mb-8">
-        <Label htmlFor="url-input" className="text-base font-medium">
+        <Label htmlFor="url-input" className="text-base font-medium text-white">
           Website URL
         </Label>
         <div className="relative mt-2">
@@ -86,7 +91,7 @@ export default function URLInput({ onURLChange, onContinue, onBack }: URLInputPr
             placeholder="https://example.com"
             value={url}
             onChange={handleURLChange}
-            className="h-12 pr-12"
+            className="h-12 pr-12 bg-white/10 border-white/30 text-white placeholder:text-white/60"
             data-testid="input-url"
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -95,36 +100,16 @@ export default function URLInput({ onURLChange, onContinue, onBack }: URLInputPr
         </div>
         {getValidationMessage()}
         
-        <div className="mt-4 p-3 bg-muted rounded-lg">
-          <p className="text-sm text-muted-foreground">
-            <strong>Examples:</strong>
-          </p>
-          <div className="text-sm text-muted-foreground mt-1 space-y-1">
-            <div>• https://example.com</div>
-            <div>• example.com</div>
-            <div>• mailto:hello@example.com</div>
-          </div>
-        </div>
       </div>
 
-      <div className="flex gap-3">
-        <Button
-          variant="outline"
-          onClick={onBack}
-          className="flex-1 h-12"
-          data-testid="button-back"
-        >
-          Back
-        </Button>
-        <Button
-          onClick={onContinue}
-          disabled={!isValid}
-          className="flex-1 h-12"
-          data-testid="button-continue"
-        >
-          Generate QR
-        </Button>
-      </div>
+      <Button
+        onClick={onContinue}
+        disabled={!isValid}
+        className="w-full h-12 bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-50"
+        data-testid="button-continue"
+      >
+        Generate QR
+      </Button>
     </div>
   );
 }

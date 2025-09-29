@@ -57,8 +57,10 @@ function QRCodeApp() {
       case 1:
         return (
           <QRModelSelector
-            onStyleSelect={handleStyleSelect}
-            onContinue={goToNextStep}
+            onStyleSelect={(style) => {
+              handleStyleSelect(style);
+              goToNextStep();
+            }}
           />
         );
       case 2:
@@ -83,7 +85,7 @@ function QRCodeApp() {
             url={url}
             style={selectedStyle!}
             image={selectedImage}
-            onStartOver={startOver}
+            onBack={goToPreviousStep}
           />
         );
       default:
@@ -92,26 +94,9 @@ function QRCodeApp() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="flex justify-between items-center p-4 border-b">
-        <h1 className="text-lg font-semibold" data-testid="app-title">
-          QR Generator
-        </h1>
-        <ThemeToggle />
-      </header>
-
+    <div className="min-h-screen">
       {/* Main Content */}
-      <main className="pb-6">
-        {/* Progress Indicator */}
-        <div className="pt-6">
-          <ProgressIndicator
-            currentStep={currentStep}
-            totalSteps={4}
-            stepLabels={stepLabels}
-          />
-        </div>
-
+      <main className="pt-12 pb-6">
         {/* Current Step Content */}
         <div className="px-4">
           {renderCurrentStep()}

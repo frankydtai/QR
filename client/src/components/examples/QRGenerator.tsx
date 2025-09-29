@@ -14,7 +14,7 @@ export default function QRGeneratorExample() {
         url="https://example.com"
         style={mockStyle}
         image={null}
-        onStartOver={() => console.log('Start over clicked')}
+        onBack={() => console.log('Back clicked')}
       />
     </div>
   );
