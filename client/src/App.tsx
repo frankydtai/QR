@@ -1,11 +1,13 @@
 import { useState } from "react";
+import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import ThemeToggle from "@/components/ThemeToggle";
-import ProgressIndicator from "@/components/ProgressIndicator";
+import { useAuth } from "@/hooks/useAuth";
+import Landing from "@/pages/Landing";
+import NotFound from "@/pages/not-found";
 import QRModelSelector, { type QRStyle } from "@/components/QRModelSelector";
 import ImageUploader from "@/components/ImageUploader";
 import URLInput from "@/components/URLInput";
@@ -13,13 +15,28 @@ import QRGenerator from "@/components/QRGenerator";
 
 type Step = 1 | 2 | 3 | 4;
 
+function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
+  return (
+    <Switch>
+      {isLoading || !isAuthenticated ? (
+        <Route path="/" component={Landing} />
+      ) : (
+        <>
+          <Route path="/" component={QRCodeApp} />
+        </>
+      )}
+      <Route component={NotFound} />
+    </Switch>
+  );
+}
+
 function QRCodeApp() {
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [selectedStyle, setSelectedStyle] = useState<QRStyle | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [url, setUrl] = useState<string>('');
-
-  const stepLabels = ['Style', 'Image', 'URL', 'Generate'];
 
   const handleStyleSelect = (style: QRStyle) => {
     setSelectedStyle(style);
@@ -45,11 +62,8 @@ function QRCodeApp() {
     }
   };
 
-  const startOver = () => {
-    setCurrentStep(1);
-    setSelectedStyle(null);
-    setSelectedImage(null);
-    setUrl('');
+  const handleLogout = () => {
+    window.location.href = '/api/logout';
   };
 
   const renderCurrentStep = () => {
@@ -95,9 +109,19 @@ function QRCodeApp() {
 
   return (
     <div className="min-h-screen">
+      {/* Header with logout */}
+      <header className="absolute top-4 right-4 z-10">
+        <button
+          onClick={handleLogout}
+          className="text-white/80 hover:text-white text-sm transition-colors"
+          data-testid="button-logout"
+        >
+          Logout
+        </button>
+      </header>
+
       {/* Main Content */}
       <main className="pt-12 pb-6">
-        {/* Current Step Content */}
         <div className="px-4">
           {renderCurrentStep()}
         </div>
@@ -111,7 +135,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <TooltipProvider>
-          <QRCodeApp />
+          <Router />
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>
