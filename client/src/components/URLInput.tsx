@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Instagram, Facebook, Globe, Crown } from 'lucide-react';
+import ConfirmURLModal from './ConfirmURLModal';
 
 interface URLInputProps {
   onURLChange: (url: string) => void;
@@ -18,6 +19,8 @@ export default function URLInput({ onURLChange, onContinue, onBack }: URLInputPr
   const [username, setUsername] = useState('');
   const [customUrl, setCustomUrl] = useState('');
   const [isValid, setIsValid] = useState<boolean>(false);
+  const [currentUrl, setCurrentUrl] = useState<string>('');
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
 
   const validateAndSetURL = (type: URLType, value: string) => {
     let finalUrl = '';
@@ -53,6 +56,7 @@ export default function URLInput({ onURLChange, onContinue, onBack }: URLInputPr
 
     setIsValid(valid);
     if (valid) {
+      setCurrentUrl(finalUrl);
       onURLChange(finalUrl);
       console.log('URL set:', finalUrl);
     }
@@ -63,6 +67,22 @@ export default function URLInput({ onURLChange, onContinue, onBack }: URLInputPr
     setUsername('');
     setCustomUrl('');
     setIsValid(false);
+    setCurrentUrl('');
+  };
+
+  const handleGenerateClick = () => {
+    if (isValid && currentUrl) {
+      setShowConfirmModal(true);
+    }
+  };
+
+  const handleConfirmURL = () => {
+    setShowConfirmModal(false);
+    onContinue();
+  };
+
+  const handleModalBack = () => {
+    setShowConfirmModal(false);
   };
 
   const handleUsernameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -196,13 +216,20 @@ export default function URLInput({ onURLChange, onContinue, onBack }: URLInputPr
       </div>
 
       <Button
-        onClick={onContinue}
+        onClick={handleGenerateClick}
         disabled={!isValid}
         className="w-full h-12 bg-white/20 border border-white/30 text-white hover:bg-white/30 disabled:opacity-50"
         data-testid="button-continue"
       >
         Generate QR
       </Button>
+
+      <ConfirmURLModal
+        isOpen={showConfirmModal}
+        url={currentUrl}
+        onConfirm={handleConfirmURL}
+        onBack={handleModalBack}
+      />
     </div>
   );
 }
