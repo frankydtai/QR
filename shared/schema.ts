@@ -35,3 +35,13 @@ export const users = pgTable("users", {
 
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
+
+// QR Code generation types
+export const qrGenerationSchema = z.object({
+  text: z.string().min(1, "Text is required"),
+  contrast: z.number().min(0.1).max(3.0).optional(),
+  brightness: z.number().min(0.1).max(3.0).optional(),
+  picture: z.string().optional(), // base64 encoded image
+});
+
+export type QRGenerationRequest = z.infer<typeof qrGenerationSchema>;
