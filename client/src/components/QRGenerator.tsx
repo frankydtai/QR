@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Share2, Download, RotateCcw } from 'lucide-react';
-import QRCode from 'qrcode';
 import type { QRStyle } from './QRModelSelector';
 
 interface QRGeneratorProps {
@@ -12,63 +11,72 @@ interface QRGeneratorProps {
   onBack: () => void;
 }
 
+declare global {
+  interface Window {
+    generateQRCode?: (content: string, options?: any) => { image?: string; error?: string };
+  }
+}
+
 export default function QRGenerator({ url, style, image, onBack }: QRGeneratorProps) {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
     generateQRCode();
-  }, [url, style]);
+  }, [url, style, image]);
 
   const generateQRCode = async () => {
     if (!url) return;
     
     setIsGenerating(true);
+    setError('');
     
     try {
-      // Generate QR code based on selected style
-      let options = {
-        width: 280,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      };
-
-      // Customize based on style
-      switch (style.id) {
-        case 'rounded':
-          options = {
-            ...options,
-            color: {
-              dark: '#000000',
-              light: '#FFFFFF'
-            }
-          };
-          break;
-        case 'gradient':
-          options = {
-            ...options,
-            color: {
-              dark: '#4F46E5',
-              light: '#FFFFFF'
-            }
-          };
-          break;
-        case 'logo':
-          options = {
-            ...options,
-            width: 320, // Larger for logo space
-          };
-          break;
+      if (!window.generateQRCode) {
+        throw new Error('WASM QR code generator not loaded yet. Please refresh the page.');
       }
 
-      const qrUrl = await QRCode.toDataURL(url, options);
-      setQrCodeUrl(qrUrl);
-      console.log('QR code generated for URL:', url);
-    } catch (error) {
-      console.error('Error generating QR code:', error);
+      let logoImage: string | undefined;
+      
+      if (image) {
+        logoImage = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const result = e.target?.result;
+            if (typeof result === 'string') {
+              resolve(result.split(',')[1]);
+            } else {
+              reject(new Error('Failed to read image'));
+            }
+          };
+          reader.onerror = () => reject(new Error('Failed to read image'));
+          reader.readAsDataURL(image);
+        });
+      }
+
+      const options: any = {};
+      if (logoImage) {
+        options.logoImage = logoImage;
+      }
+
+      const result = window.generateQRCode(url, options);
+      
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      if (result.image) {
+        const base64Image = `data:image/png;base64,${result.image}`;
+        setQrCodeUrl(base64Image);
+        console.log('QR code generated for URL:', url);
+      } else {
+        throw new Error('No image returned from QR code generator');
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate QR code';
+      console.error('Error generating QR code:', errorMessage);
+      setError(errorMessage);
     } finally {
       setIsGenerating(false);
     }
@@ -79,7 +87,6 @@ export default function QRGenerator({ url, style, image, onBack }: QRGeneratorPr
 
     if (navigator.share) {
       try {
-        // Convert data URL to blob
         const response = await fetch(qrCodeUrl);
         const blob = await response.blob();
         const file = new File([blob], 'qr-code.png', { type: 'image/png' });
@@ -95,7 +102,6 @@ export default function QRGenerator({ url, style, image, onBack }: QRGeneratorPr
         handleDownload();
       }
     } else {
-      // Fallback for browsers without Web Share API
       handleDownload();
     }
   };
@@ -133,6 +139,13 @@ export default function QRGenerator({ url, style, image, onBack }: QRGeneratorPr
           {isGenerating ? (
             <div className="aspect-square w-full max-w-[280px] mx-auto flex items-center justify-center bg-muted rounded-lg">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : error ? (
+            <div className="aspect-square w-full max-w-[280px] mx-auto flex items-center justify-center bg-muted rounded-lg">
+              <div className="text-center p-4">
+                <p className="text-red-500 mb-2">Error</p>
+                <p className="text-sm text-muted-foreground">{error}</p>
+              </div>
             </div>
           ) : qrCodeUrl ? (
             <div className="aspect-square w-full max-w-[280px] mx-auto">
