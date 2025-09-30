@@ -55,7 +55,15 @@ export default function QRGenerator({ url, style, image, onBack }: QRGeneratorPr
         });
       }
 
-      const options: any = {};
+      const options: any = {
+        qrWidth: 280,
+        qrMargin: 2,
+        qrColor: "#000000",
+        qrBackColor: "#ffffff",
+        encLevel: "H",
+        encVersion: 0,
+      };
+      
       if (logoImage) {
         options.logoImage = logoImage;
       }
