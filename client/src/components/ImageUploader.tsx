@@ -33,6 +33,13 @@ export default function ImageUploader({ onImageSelect, onContinue, onBack }: Ima
     
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
+    
+    // Reset position and scale when new image is selected
+    setImagePosition({ x: 0, y: 0 });
+    setImageScale(1);
+    setContrast([0]);
+    setBrightness([0]);
+    
     console.log('Image selected:', file.name);
   };
 
@@ -149,7 +156,7 @@ export default function ImageUploader({ onImageSelect, onContinue, onBack }: Ima
                   <img 
                     src={previewUrl} 
                     alt="Preview"
-                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none select-none"
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full object-contain select-none"
                     style={getImageStyle()}
                     onMouseDown={handleMouseDown}
                     data-testid="image-preview"

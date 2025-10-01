@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { Share2, Download, RotateCcw } from 'lucide-react';
-import type { QRStyle } from './QRModelSelector';
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Share2, Download, RotateCcw } from "lucide-react";
+import type { QRStyle } from "./QRModelSelector";
 
 interface QRGeneratorProps {
   url: string;
@@ -12,15 +12,25 @@ interface QRGeneratorProps {
 }
 
 declare global {
+  interface GenResult {
+    success?: boolean;
+    error?: string;
+    base64EncodedImage?: string;
+  }
   interface Window {
-    generateQRCode?: (content: string, options?: any) => { image?: string; error?: string };
+    generateQRCode?: (content: string, options?: any) => GenResult;
   }
 }
 
-export default function QRGenerator({ url, style, image, onBack }: QRGeneratorProps) {
-  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+export default function QRGenerator({
+  url,
+  style,
+  image,
+  onBack,
+}: QRGeneratorProps) {
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string>('');
+  const [error, setError] = useState<string>("");
 
   useEffect(() => {
     generateQRCode();
@@ -28,62 +38,70 @@ export default function QRGenerator({ url, style, image, onBack }: QRGeneratorPr
 
   const generateQRCode = async () => {
     if (!url) return;
-    
+
     setIsGenerating(true);
-    setError('');
-    
+    setError("");
+
     try {
       if (!window.generateQRCode) {
-        throw new Error('WASM QR code generator not loaded yet. Please refresh the page.');
+        throw new Error(
+          "WASM QR code generator not loaded yet. Please refresh the page.",
+        );
       }
 
-      let logoImage: string | undefined;
-      
+      let halftoneImage: string | undefined;
+
       if (image) {
-        logoImage = await new Promise<string>((resolve, reject) => {
+        halftoneImage = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (e) => {
             const result = e.target?.result;
-            if (typeof result === 'string') {
-              resolve(result.split(',')[1]);
+            if (typeof result === "string") {
+              resolve(result.split(",")[1]);
             } else {
-              reject(new Error('Failed to read image'));
+              reject(new Error("Failed to read image"));
             }
           };
-          reader.onerror = () => reject(new Error('Failed to read image'));
+          reader.onerror = () => reject(new Error("Failed to read image"));
           reader.readAsDataURL(image);
         });
       }
 
       const options: any = {
-        qrWidth: 280,
-        qrMargin: 2,
-        qrColor: "#000000",
-        qrBackColor: "#ffffff",
-        encLevel: "H",
-        encVersion: 0,
+        // encodeOption
+        encodeVersion: 0, // 0 = let library choose
+        encodeMode: 0, // 0=auto (可先不傳也行)
+        encodeECLevel: "H",
+        // outputOption
+        outputQrWidth: 280,
+        outputMargin: 2,
+        outputQrColor: "#000000",
+        outputBgColor: "#ffffff",
+        outputBgTransparent: false,
+        outputCircleShape: false,
+        outputImageEncoder: "png",
       };
-      
-      if (logoImage) {
-        options.logoImage = logoImage;
+
+      if (halftoneImage) {
+        options.halftoneBase64 = halftoneImage;
       }
 
       const result = window.generateQRCode(url, options);
-      
-      if (result.error) {
-        throw new Error(result.error);
+
+      if (!result || result.success === false) {
+        throw new Error(result?.error || "QR generation failed");
       }
-      
-      if (result.image) {
-        const base64Image = `data:image/png;base64,${result.image}`;
+
+      if (result.base64EncodedImage) {
+        const base64Image = `data:image/png;base64,${result.base64EncodedImage}`;
         setQrCodeUrl(base64Image);
-        console.log('QR code generated for URL:', url);
       } else {
-        throw new Error('No image returned from QR code generator');
+        throw new Error("No image returned from QR code generator");
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to generate QR code';
-      console.error('Error generating QR code:', errorMessage);
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to generate QR code";
+      console.error("Error generating QR code:", errorMessage);
       setError(errorMessage);
     } finally {
       setIsGenerating(false);
@@ -97,16 +115,16 @@ export default function QRGenerator({ url, style, image, onBack }: QRGeneratorPr
       try {
         const response = await fetch(qrCodeUrl);
         const blob = await response.blob();
-        const file = new File([blob], 'qr-code.png', { type: 'image/png' });
+        const file = new File([blob], "qr-code.png", { type: "image/png" });
 
         await navigator.share({
-          title: 'QR Code',
+          title: "QR Code",
           text: `QR code for ${url}`,
-          files: [file]
+          files: [file],
         });
-        console.log('QR code shared successfully');
+        console.log("QR code shared successfully");
       } catch (error) {
-        console.log('Share failed, falling back to download');
+        console.log("Share failed, falling back to download");
         handleDownload();
       }
     } else {
@@ -117,27 +135,30 @@ export default function QRGenerator({ url, style, image, onBack }: QRGeneratorPr
   const handleDownload = () => {
     if (!qrCodeUrl) return;
 
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.download = `qr-code-${style.id}.png`;
     link.href = qrCodeUrl;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    console.log('QR code downloaded');
+    console.log("QR code downloaded");
   };
 
   return (
     <div className="w-full max-w-md mx-auto p-6">
-      <button 
+      <button
         onClick={onBack}
         className="mb-6 text-white/80 hover:text-white transition-colors"
         data-testid="button-back"
       >
         ← Back
       </button>
-      
+
       <div className="text-center mb-8">
-        <h1 className="text-2xl font-light mb-2 text-white" data-testid="page-title">
+        <h1
+          className="text-2xl font-light mb-2 text-white"
+          data-testid="page-title"
+        >
           Your QR Code
         </h1>
       </div>
@@ -157,8 +178,8 @@ export default function QRGenerator({ url, style, image, onBack }: QRGeneratorPr
             </div>
           ) : qrCodeUrl ? (
             <div className="aspect-square w-full max-w-[280px] mx-auto">
-              <img 
-                src={qrCodeUrl} 
+              <img
+                src={qrCodeUrl}
                 alt="Generated QR Code"
                 className="w-full h-full rounded-lg shadow-sm"
                 data-testid="generated-qr-code"
@@ -166,10 +187,11 @@ export default function QRGenerator({ url, style, image, onBack }: QRGeneratorPr
             </div>
           ) : (
             <div className="aspect-square w-full max-w-[280px] mx-auto flex items-center justify-center bg-muted rounded-lg">
-              <p className="text-muted-foreground">Failed to generate QR code</p>
+              <p className="text-muted-foreground">
+                Failed to generate QR code
+              </p>
             </div>
           )}
-          
         </div>
       </Card>
 
