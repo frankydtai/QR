@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Upload, X, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface ImageUploaderProps {
-  onImageSelect: (file: File | null, contrast?: number, brightness?: number) => void;
+  onImageSelect: (file: File | null) => void;
   onContinue: () => void;
   onBack: () => void;
 }
@@ -29,7 +29,7 @@ export default function ImageUploader({ onImageSelect, onContinue, onBack }: Ima
     }
 
     setSelectedImage(file);
-    onImageSelect(file, contrast[0], brightness[0]);
+    onImageSelect(file);
     
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
@@ -190,12 +190,7 @@ export default function ImageUploader({ onImageSelect, onContinue, onBack }: Ima
                   <Label className="text-white/80 text-sm">Contrast</Label>
                   <Slider
                     value={contrast}
-                    onValueChange={(value) => {
-                      setContrast(value);
-                      if (selectedImage) {
-                        onImageSelect(selectedImage, value[0], brightness[0]);
-                      }
-                    }}
+                    onValueChange={setContrast}
                     min={-100}
                     max={100}
                     step={10}
@@ -212,12 +207,7 @@ export default function ImageUploader({ onImageSelect, onContinue, onBack }: Ima
                   <Label className="text-white/80 text-sm">Brightness</Label>
                   <Slider
                     value={brightness}
-                    onValueChange={(value) => {
-                      setBrightness(value);
-                      if (selectedImage) {
-                        onImageSelect(selectedImage, contrast[0], value[0]);
-                      }
-                    }}
+                    onValueChange={setBrightness}
                     min={-100}
                     max={100}
                     step={10}

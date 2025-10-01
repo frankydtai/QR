@@ -5,6 +5,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { useAuth } from "@/hooks/useAuth";
+import Landing from "@/pages/Landing";
 import NotFound from "@/pages/not-found";
 import QRModelSelector, { type QRStyle } from "@/components/QRModelSelector";
 import ImageUploader from "@/components/ImageUploader";
@@ -14,9 +16,17 @@ import QRGenerator from "@/components/QRGenerator";
 type Step = 1 | 2 | 3 | 4;
 
 function Router() {
+  const { isAuthenticated, isLoading } = useAuth();
+
   return (
     <Switch>
-      <Route path="/" component={QRCodeApp} />
+      {isLoading || !isAuthenticated ? (
+        <Route path="/" component={Landing} />
+      ) : (
+        <>
+          <Route path="/" component={QRCodeApp} />
+        </>
+      )}
       <Route component={NotFound} />
     </Switch>
   );
@@ -27,17 +37,13 @@ function QRCodeApp() {
   const [selectedStyle, setSelectedStyle] = useState<QRStyle | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [url, setUrl] = useState<string>('');
-  const [contrast, setContrast] = useState<number>(0);
-  const [brightness, setBrightness] = useState<number>(0);
 
   const handleStyleSelect = (style: QRStyle) => {
     setSelectedStyle(style);
   };
 
-  const handleImageSelect = (file: File | null, contrastVal?: number, brightnessVal?: number) => {
+  const handleImageSelect = (file: File | null) => {
     setSelectedImage(file);
-    if (contrastVal !== undefined) setContrast(contrastVal);
-    if (brightnessVal !== undefined) setBrightness(brightnessVal);
   };
 
   const handleURLChange = (newUrl: string) => {
@@ -54,6 +60,10 @@ function QRCodeApp() {
     if (currentStep > 1) {
       setCurrentStep((prev) => (prev - 1) as Step);
     }
+  };
+
+  const handleLogout = () => {
+    window.location.href = '/api/logout';
   };
 
   const renderCurrentStep = () => {
@@ -89,8 +99,6 @@ function QRCodeApp() {
             url={url}
             style={selectedStyle!}
             image={selectedImage}
-            contrast={contrast}
-            brightness={brightness}
             onBack={goToPreviousStep}
           />
         );
@@ -101,8 +109,19 @@ function QRCodeApp() {
 
   return (
     <div className="min-h-screen">
+      {/* Header with logout */}
+      <header className="absolute top-4 right-4 z-10">
+        <button
+          onClick={handleLogout}
+          className="text-white/80 hover:text-white text-sm transition-colors"
+          data-testid="button-logout"
+        >
+          Logout
+        </button>
+      </header>
+
       {/* Main Content */}
-      <main className="pt-6 pb-6">
+      <main className="pt-12 pb-6">
         <div className="px-4">
           {renderCurrentStep()}
         </div>
