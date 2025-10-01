@@ -27,7 +27,7 @@ export default function ImageUploader({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null); // ← 新增：取得預覽框實際寬高
   const [fitScale, setFitScale] = useState(1);
-  
+
   // Text overlay state
   interface TextBox {
     id: number;
@@ -134,22 +134,27 @@ export default function ImageUploader({
   // Text box handlers
   const addTextBox = () => {
     const newId = Date.now();
-    setTextBoxes([...textBoxes, {
-      id: newId,
-      x: 50,
-      y: 50,
-      text: 'Double click to edit'
-    }]);
+    setTextBoxes([
+      ...textBoxes,
+      {
+        id: newId,
+        x: 50,
+        y: 50,
+        text: "Double click to edit",
+      },
+    ]);
   };
 
   const handleTextMouseDown = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
     setDraggingTextId(id);
-    const textBox = textBoxes.find(t => t.id === id);
+    const textBox = textBoxes.find((t) => t.id === id);
     if (textBox) {
+      const rect = containerRef.current?.getBoundingClientRect(); // added
       setTextDragStart({
-        x: e.clientX - textBox.x,
-        y: e.clientY - textBox.y
+        // added
+        x: e.clientX - (rect?.left ?? 0) - textBox.x, // added
+        y: e.clientY - (rect?.top ?? 0) - textBox.y,
       });
     }
   };
@@ -159,10 +164,12 @@ export default function ImageUploader({
       const rect = containerRef.current.getBoundingClientRect();
       const newX = e.clientX - rect.left - textDragStart.x;
       const newY = e.clientY - rect.top - textDragStart.y;
-      
-      setTextBoxes(textBoxes.map(t => 
-        t.id === draggingTextId ? { ...t, x: newX, y: newY } : t
-      ));
+
+      setTextBoxes(
+        textBoxes.map((t) =>
+          t.id === draggingTextId ? { ...t, x: newX, y: newY } : t,
+        ),
+      );
     }
   };
 
@@ -175,64 +182,110 @@ export default function ImageUploader({
   };
 
   const handleTextChange = (id: number, newText: string) => {
-    setTextBoxes(textBoxes.map(t => 
-      t.id === id ? { ...t, text: newText } : t
-    ));
+    setTextBoxes(
+      textBoxes.map((t) => (t.id === id ? { ...t, text: newText } : t)),
+    );
   };
 
   const removeTextBox = (id: number) => {
-    setTextBoxes(textBoxes.filter(t => t.id !== id));
+    setTextBoxes(textBoxes.filter((t) => t.id !== id));
   };
 
   async function exportCroppedPngFromView(previewUrl: string): Promise<File> {
-    // added
     return new Promise((resolve, reject) => {
-      // added
-      const img = new Image(); // added
-      img.crossOrigin = "anonymous"; // added
+      const img = new Image();
+      img.crossOrigin = "anonymous";
       img.onload = () => {
-        // added
-        const box = containerRef.current?.getBoundingClientRect(); // added
-        const bw = Math.round(box?.width ?? 256); // added
-        const bh = Math.round(box?.height ?? 256); // added
-        const dpr = window.devicePixelRatio || 1; // added
-        // added
-        const canvas = document.createElement("canvas"); // added
-        canvas.width = Math.max(1, Math.floor(bw * dpr)); // added
-        canvas.height = Math.max(1, Math.floor(bh * dpr)); // added
-        const ctx = canvas.getContext("2d"); // added
+        const box = containerRef.current?.getBoundingClientRect();
+        const bw = Math.round(box?.width ?? 256);
+        const bh = Math.round(box?.height ?? 256);
+        const dpr = window.devicePixelRatio || 1;
+
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.floor(bw * dpr));
+        canvas.height = Math.max(1, Math.floor(bh * dpr));
+        const ctx = canvas.getContext("2d");
         if (!ctx) {
           reject(new Error("No 2D context"));
           return;
-        } // added
-        // added
-        // 透明背景                                                                  // added
-        ctx.clearRect(0, 0, canvas.width, canvas.height); // added
-        // added
-        // 將原本 img 的 transform 套到畫布：先以畫布中心為原點，再套位移與縮放             // added
-        // 注意：使用「絕對 imageScale」，不是顯示百分比。                                // added
-        const tx = (bw / 2 + imagePosition.x) * dpr; // added
-        const ty = (bh / 2 + imagePosition.y) * dpr; // added
-        ctx.setTransform(imageScale * dpr, 0, 0, imageScale * dpr, tx, ty); // added
-        // added
-        // 以圖片中心為定位點繪製                                                     // added
-        const nw = img.naturalWidth; // added
-        const nh = img.naturalHeight; // added
-        ctx.drawImage(img, -nw / 2, -nh / 2); // added
-        // added
-        canvas.toBlob((blob) => {
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Image 變換（以畫布中心為原點）：與預覽一致
+        const tx = (bw / 2 + imagePosition.x) * dpr;
+        const ty = (bh / 2 + imagePosition.y) * dpr;
+        ctx.setTransform(imageScale * dpr, 0, 0, imageScale * dpr, tx, ty);
+        const nw = img.naturalWidth;
+        const nh = img.naturalHeight;
+        ctx.drawImage(img, -nw / 2, -nh / 2);
+
+        // ===== 在這裡把文字框烙印到輸出圖上（按容器座標） =====           // added
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // added
+        // 與 UI 對齊的樣式（可依你在 <div> 上用的 text-xl 調整 size/weight） // added
+        const fontPx = 20; // text-xl ≈ 20px                                      // added
+        const fontWeight = 600; // Tailwind font-medium ≈ 500~600，這裡取 600      // added
+        ctx.font = `${fontWeight} ${fontPx}px system-ui, -apple-system, Segoe UI, Roboto, Arial`; // added
+        ctx.textBaseline = "top"; // added
+
+        const padX = 8; // 對應 px-2                                             // added
+        const padY = 4; // 對應 py-1                                             // added
+        const radius = 6; // 圓角                                                  // added
+
+        // 小工具：畫圓角矩形                                                       // added
+        const roundRect = (
+          x: number,
+          y: number,
+          w: number,
+          h: number,
+          r: number,
+        ) => {
           // added
+          const rr = Math.min(r, w / 2, h / 2); // added
+          ctx.beginPath(); // added
+          ctx.moveTo(x + rr, y); // added
+          ctx.arcTo(x + w, y, x + w, y + h, rr); // added
+          ctx.arcTo(x + w, y + h, x, y + h, rr); // added
+          ctx.arcTo(x, y + h, x, y, rr); // added
+          ctx.arcTo(x, y, x + w, y, rr); // added
+          ctx.closePath(); // added
+        }; // added
+
+        textBoxes.forEach((tb) => {
+          // added
+          const metrics = ctx.measureText(tb.text); // added
+          const textW = Math.ceil(metrics.width); // added
+          const textH = Math.ceil(fontPx * 1.2); // 估算行高                        // added
+          const boxX = tb.x; // added
+          const boxY = tb.y; // added
+          const boxW = textW + padX * 2; // added
+          const boxH = textH + padY * 2; // added
+
+          // 背景（白、90% 不透明，帶圓角）                                         // added
+          ctx.fillStyle = "rgba(255,255,255,0.9)"; // added
+          roundRect(boxX, boxY, boxW, boxH, radius); // added
+          ctx.fill(); // added
+
+          // 文字（黑）                                                             // added
+          ctx.fillStyle = "#000"; // added
+          ctx.fillText(tb.text, boxX + padX, boxY + padY); // added
+
+          // 可選：右上角刪除鈕不烙印，維持純文字框                                 // added
+        }); // added
+        // ===== 文字烙印結束 =====                                                 // added
+
+        canvas.toBlob((blob) => {
           if (!blob) {
             reject(new Error("toBlob failed"));
             return;
-          } // added
-          const file = new File([blob], "cropped.png", { type: "image/png" }); // added
-          resolve(file); // added
-        }, "image/png"); // added
-      }; // added
-      img.onerror = (e) => reject(new Error("Image load error")); // added
-      img.src = previewUrl; // added
-    }); // added
+          }
+          const file = new File([blob], "cropped.png", { type: "image/png" });
+          resolve(file);
+        }, "image/png");
+      };
+      img.onerror = () => reject(new Error("Image load error"));
+      img.src = previewUrl;
+    });
   }
 
   return (
@@ -317,16 +370,17 @@ export default function ImageUploader({
                     data-testid="image-preview"
                     draggable={false}
                   />
-                  
+
                   {/* Text Overlays */}
-                  {textBoxes.map(textBox => (
+                  {textBoxes.map((textBox) => (
                     <div
                       key={textBox.id}
                       className="absolute"
                       style={{
                         left: `${textBox.x}px`,
                         top: `${textBox.y}px`,
-                        cursor: draggingTextId === textBox.id ? 'grabbing' : 'grab'
+                        cursor:
+                          draggingTextId === textBox.id ? "grabbing" : "grab",
                       }}
                       onMouseDown={(e) => handleTextMouseDown(e, textBox.id)}
                       onDoubleClick={() => handleTextDoubleClick(textBox.id)}
@@ -336,10 +390,12 @@ export default function ImageUploader({
                         <input
                           type="text"
                           value={textBox.text}
-                          onChange={(e) => handleTextChange(textBox.id, e.target.value)}
+                          onChange={(e) =>
+                            handleTextChange(textBox.id, e.target.value)
+                          }
                           onBlur={() => setEditingTextId(null)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') setEditingTextId(null);
+                            if (e.key === "Enter") setEditingTextId(null);
                           }}
                           autoFocus
                           className="bg-white/90 text-black px-2 py-1 rounded border-2 border-blue-500 min-w-[100px]"
@@ -347,7 +403,7 @@ export default function ImageUploader({
                         />
                       ) : (
                         <div className="relative group">
-                          <div className="bg-white/90 text-black px-2 py-1 rounded font-medium select-none shadow-lg">
+                          <div className="bg-white/90 text-black px-2 py-1 rounded font-medium text-9xl select-none shadow-lg">
                             {textBox.text}
                           </div>
                           <button
@@ -364,7 +420,7 @@ export default function ImageUploader({
                       )}
                     </div>
                   ))}
-                  
+
                   <div className="absolute top-2 left-2 text-white/60 text-xs">
                     Drag to move • Scroll to zoom
                   </div>
