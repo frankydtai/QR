@@ -5,40 +5,53 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Upload, X, ZoomIn, ZoomOut, Type } from "lucide-react";
 
+interface TextBox {
+  id: number;
+  x: number;
+  y: number;
+  text: string;
+}
+
+interface ImageEditState {
+  previewUrl: string | null;
+  imagePosition: { x: number; y: number };
+  imageScale: number;
+  contrast: number[];
+  brightness: number[];
+  fitScale: number;
+  textBoxes: TextBox[];
+}
+
 interface ImageUploaderProps {
   onImageSelect: (file: File | null) => void;
   onContinue: () => void;
   onBack: () => void;
+  imageEditState: ImageEditState;
+  setImageEditState: (state: ImageEditState) => void;
 }
 
 export default function ImageUploader({
   onImageSelect,
   onContinue,
   onBack,
+  imageEditState,
+  setImageEditState,
 }: ImageUploaderProps) {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [imagePosition, setImagePosition] = useState({ x: 0, y: 0 });
-  const [imageScale, setImageScale] = useState(1);
-  const [contrast, setContrast] = useState([0]);
-  const [brightness, setBrightness] = useState([0]);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null); // ← 新增：取得預覽框實際寬高
-  const [fitScale, setFitScale] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Text overlay state
-  interface TextBox {
-    id: number;
-    x: number;
-    y: number;
-    text: string;
-  }
-  const [textBoxes, setTextBoxes] = useState<TextBox[]>([]);
   const [draggingTextId, setDraggingTextId] = useState<number | null>(null);
   const [textDragStart, setTextDragStart] = useState({ x: 0, y: 0 });
   const [editingTextId, setEditingTextId] = useState<number | null>(null);
+
+  const { previewUrl, imagePosition, imageScale, contrast, brightness, fitScale, textBoxes } = imageEditState;
+
+  const updateState = (updates: Partial<ImageEditState>) => {
+    setImageEditState({ ...imageEditState, ...updates });
+  };
 
   const handleFileSelect = (file: File) => {
     if (!file.type.startsWith("image/")) {
@@ -50,14 +63,14 @@ export default function ImageUploader({
     onImageSelect(file);
 
     const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-
-    // Reset position and scale when new image is selected
-    setImagePosition({ x: 0, y: 0 });
-    setImageScale(1);
-    setFitScale(1);
-    setContrast([0]);
-    setBrightness([0]);
+    updateState({
+      previewUrl: url,
+      imagePosition: { x: 0, y: 0 },
+      imageScale: 1,
+      fitScale: 1,
+      contrast: [0],
+      brightness: [0],
+    });
 
     console.log("Image selected:", file.name);
   };
@@ -79,13 +92,15 @@ export default function ImageUploader({
 
   const removeImage = () => {
     setSelectedImage(null);
-    setPreviewUrl(null);
-    setImagePosition({ x: 0, y: 0 });
-    setImageScale(1);
-    setFitScale(1);
-    setContrast([0]);
-    setBrightness([0]);
-    setTextBoxes([]);
+    updateState({
+      previewUrl: null,
+      imagePosition: { x: 0, y: 0 },
+      imageScale: 1,
+      fitScale: 1,
+      contrast: [0],
+      brightness: [0],
+      textBoxes: [],
+    });
     onImageSelect(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -104,9 +119,11 @@ export default function ImageUploader({
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging) return;
 
-    setImagePosition({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y,
+    updateState({
+      imagePosition: {
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y,
+      },
     });
   };
 
@@ -117,12 +134,10 @@ export default function ImageUploader({
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const scaleChange = e.deltaY > 0 ? -0.1 : 0.1;
-    setImageScale((prev) => Math.max(0.1, Math.min(3, prev + scaleChange)));
-    setImageScale((prev) => {
-      const minS = fitScale * 0.1; // ↓ 下限 = 貼齊後的 50%
-      const maxS = fitScale * 3; // ↑ 上限 = 貼齊後的 300%（可改你的 xx%）
-      return Math.max(minS, Math.min(maxS, prev + scaleChange));
-    });
+    const minS = fitScale * 0.1;
+    const maxS = fitScale * 3;
+    const newScale = Math.max(minS, Math.min(maxS, imageScale + scaleChange));
+    updateState({ imageScale: newScale });
   };
 
   const getImageStyle = () => ({
@@ -134,15 +149,17 @@ export default function ImageUploader({
   // Text box handlers
   const addTextBox = () => {
     const newId = Date.now();
-    setTextBoxes([
-      ...textBoxes,
-      {
-        id: newId,
-        x: 50,
-        y: 50,
-        text: "Double click to edit",
-      },
-    ]);
+    updateState({
+      textBoxes: [
+        ...textBoxes,
+        {
+          id: newId,
+          x: 50,
+          y: 50,
+          text: "Double click to edit",
+        },
+      ],
+    });
   };
 
   const handleTextMouseDown = (e: React.MouseEvent, id: number) => {
@@ -150,10 +167,9 @@ export default function ImageUploader({
     setDraggingTextId(id);
     const textBox = textBoxes.find((t) => t.id === id);
     if (textBox) {
-      const rect = containerRef.current?.getBoundingClientRect(); // added
+      const rect = containerRef.current?.getBoundingClientRect();
       setTextDragStart({
-        // added
-        x: e.clientX - (rect?.left ?? 0) - textBox.x, // added
+        x: e.clientX - (rect?.left ?? 0) - textBox.x,
         y: e.clientY - (rect?.top ?? 0) - textBox.y,
       });
     }
@@ -165,11 +181,11 @@ export default function ImageUploader({
       const newX = e.clientX - rect.left - textDragStart.x;
       const newY = e.clientY - rect.top - textDragStart.y;
 
-      setTextBoxes(
-        textBoxes.map((t) =>
+      updateState({
+        textBoxes: textBoxes.map((t) =>
           t.id === draggingTextId ? { ...t, x: newX, y: newY } : t,
         ),
-      );
+      });
     }
   };
 
@@ -182,20 +198,26 @@ export default function ImageUploader({
   };
 
   const handleTextChange = (id: number, newText: string) => {
-    setTextBoxes(
-      textBoxes.map((t) => (t.id === id ? { ...t, text: newText } : t)),
-    );
+    updateState({
+      textBoxes: textBoxes.map((t) => (t.id === id ? { ...t, text: newText } : t)),
+    });
   };
 
   const removeTextBox = (id: number) => {
-    setTextBoxes(textBoxes.filter((t) => t.id !== id));
+    updateState({
+      textBoxes: textBoxes.filter((t) => t.id !== id),
+    });
   };
 
   async function exportCroppedPngFromView(previewUrl: string): Promise<File> {
+    console.log("[Export Start] Beginning export process...");
+    console.log("[Export State] Text boxes to be rendered:", textBoxes); // IMPORTANT: Check this first
+
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = () => {
+        console.log("[Export] Image has loaded successfully.");
         const box = containerRef.current?.getBoundingClientRect();
         const bw = Math.round(box?.width ?? 256);
         const bh = Math.round(box?.height ?? 256);
@@ -206,84 +228,87 @@ export default function ImageUploader({
         canvas.height = Math.max(1, Math.floor(bh * dpr));
         const ctx = canvas.getContext("2d");
         if (!ctx) {
+          console.error("[Export Error] Failed to get 2D context.");
           reject(new Error("No 2D context"));
           return;
         }
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Image 變換（以畫布中心為原點）：與預覽一致
+        // --- 1. Draw Image ---
+        ctx.save();
         const tx = (bw / 2 + imagePosition.x) * dpr;
         const ty = (bh / 2 + imagePosition.y) * dpr;
         ctx.setTransform(imageScale * dpr, 0, 0, imageScale * dpr, tx, ty);
-        const nw = img.naturalWidth;
-        const nh = img.naturalHeight;
-        ctx.drawImage(img, -nw / 2, -nh / 2);
+        ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+        ctx.restore();
+        console.log("[Export] Image drawn to canvas.");
 
-        // ===== 在這裡把文字框烙印到輸出圖上（按容器座標） =====           // added
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // added
-        // 與 UI 對齊的樣式（可依你在 <div> 上用的 text-xl 調整 size/weight） // added
-        const fontPx = 20; // text-xl ≈ 20px                                      // added
-        const fontWeight = 600; // Tailwind font-medium ≈ 500~600，這裡取 600      // added
-        ctx.font = `${fontWeight} ${fontPx}px system-ui, -apple-system, Segoe UI, Roboto, Arial`; // added
-        ctx.textBaseline = "top"; // added
+        // --- 2. Draw Text Overlays ---
+        if (textBoxes.length === 0) {
+          console.warn(
+            "[Export] Text box array is empty. No text will be drawn.",
+          );
+        }
 
-        const padX = 8; // 對應 px-2                                             // added
-        const padY = 4; // 對應 py-1                                             // added
-        const radius = 6; // 圓角                                                  // added
+        ctx.save();
+        ctx.scale(dpr, dpr); // Scale context to match CSS pixels
 
-        // 小工具：畫圓角矩形                                                       // added
-        const roundRect = (
-          x: number,
-          y: number,
-          w: number,
-          h: number,
-          r: number,
-        ) => {
-          // added
-          const rr = Math.min(r, w / 2, h / 2); // added
-          ctx.beginPath(); // added
-          ctx.moveTo(x + rr, y); // added
-          ctx.arcTo(x + w, y, x + w, y + h, rr); // added
-          ctx.arcTo(x + w, y + h, x, y + h, rr); // added
-          ctx.arcTo(x, y + h, x, y, rr); // added
-          ctx.arcTo(x, y, x + w, y, rr); // added
-          ctx.closePath(); // added
-        }; // added
+        textBoxes.forEach((tb, index) => {
+          console.log(`[Export Text Loop ${index}] Processing text box:`, tb);
 
-        textBoxes.forEach((tb) => {
-          // added
-          const metrics = ctx.measureText(tb.text); // added
-          const textW = Math.ceil(metrics.width); // added
-          const textH = Math.ceil(fontPx * 1.2); // 估算行高                        // added
-          const boxX = tb.x; // added
-          const boxY = tb.y; // added
-          const boxW = textW + padX * 2; // added
-          const boxH = textH + padY * 2; // added
+          const fontPx = 128;
+          const fontWeight = 600;
+          ctx.font = `${fontWeight} ${fontPx}px system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+          ctx.textBaseline = "top";
+          const metrics = ctx.measureText(tb.text);
+          const textW = Math.ceil(metrics.width);
+          const textH = Math.ceil(fontPx * 1.2);
+          const padX = 8;
+          const padY = 4;
+          const boxX = tb.x;
+          const boxY = tb.y;
+          const boxW = textW + padX * 2;
+          const boxH = textH + padY * 2;
 
-          // 背景（白、90% 不透明，帶圓角）                                         // added
-          ctx.fillStyle = "rgba(255,255,255,0.9)"; // added
-          roundRect(boxX, boxY, boxW, boxH, radius); // added
-          ctx.fill(); // added
+          console.log(
+            `[Export Text Loop ${index}] Coords: x=${boxX}, y=${boxY}. Drawing text: "${tb.text}"`,
+          );
 
-          // 文字（黑）                                                             // added
-          ctx.fillStyle = "#000"; // added
-          ctx.fillText(tb.text, boxX + padX, boxY + padY); // added
+          // Background
+          ctx.fillStyle = "rgba(255,255,255,0.9)";
+          ctx.fillRect(boxX, boxY, boxW, boxH); // Using simple fillRect for now to eliminate custom function as a variable
 
-          // 可選：右上角刪除鈕不烙印，維持純文字框                                 // added
-        }); // added
-        // ===== 文字烙印結束 =====                                                 // added
+          // Text
+          ctx.fillStyle = "#000";
+          ctx.fillText(tb.text, boxX + padX, boxY + padY);
+        });
+        ctx.restore();
+        console.log("[Export] Finished processing all text boxes.");
 
+        // --- 3. Export ---
         canvas.toBlob((blob) => {
           if (!blob) {
+            console.error(
+              "[Export Error] Canvas toBlob failed to produce a blob.",
+            );
             reject(new Error("toBlob failed"));
             return;
           }
+          console.log(
+            "[Export Success] Blob created successfully. Resolving promise.",
+          );
           const file = new File([blob], "cropped.png", { type: "image/png" });
           resolve(file);
         }, "image/png");
       };
-      img.onerror = () => reject(new Error("Image load error"));
+      img.onerror = () => {
+        console.error(
+          "[Export Error] Image failed to load from src:",
+          previewUrl,
+        );
+        reject(new Error("Image load error"));
+      };
       img.src = previewUrl;
     });
   }
@@ -356,15 +381,15 @@ export default function ImageUploader({
                       const img = e.currentTarget;
                       const nw = img.naturalWidth;
                       const nh = img.naturalHeight;
-                      // 讀容器尺寸（若讀不到就 fallback 到 256×256，因為你是 w-64）
                       const box = containerRef.current?.getBoundingClientRect();
                       const bw = box?.width ?? 256;
                       const bh = box?.height ?? 256;
-                      // 以 contain 策略計算初始縮放
                       const scale0 = Math.min(bw / nw, bh / nh);
-                      setFitScale(scale0);
-                      setImageScale(scale0);
-                      setImagePosition({ x: 0, y: 0 });
+                      updateState({
+                        fitScale: scale0,
+                        imageScale: scale0,
+                        imagePosition: { x: 0, y: 0 },
+                      });
                     }}
                     onMouseDown={handleMouseDown}
                     data-testid="image-preview"
@@ -432,15 +457,11 @@ export default function ImageUploader({
                     variant="outline"
                     size="icon"
                     className="w-8 h-8 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                    onClick={
-                      () =>
-                        // added
-                        setImageScale((prev) => {
-                          // added
-                          const minS = fitScale * 0.1; // added
-                          return Math.max(minS, prev - 0.1); // added
-                        }) // added
-                    }
+                    onClick={() => {
+                      const minS = fitScale * 0.1;
+                      const newScale = Math.max(minS, imageScale - 0.1);
+                      updateState({ imageScale: newScale });
+                    }}
                     data-testid="button-zoom-out"
                   >
                     <ZoomOut className="w-4 h-4" />
@@ -452,15 +473,11 @@ export default function ImageUploader({
                     variant="outline"
                     size="icon"
                     className="w-8 h-8 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                    onClick={
-                      () =>
-                        // added
-                        setImageScale((prev) => {
-                          // added
-                          const maxS = fitScale * 3; // added
-                          return Math.min(maxS, prev + 0.1); // added
-                        }) // added
-                    }
+                    onClick={() => {
+                      const maxS = fitScale * 3;
+                      const newScale = Math.min(maxS, imageScale + 0.1);
+                      updateState({ imageScale: newScale });
+                    }}
                     data-testid="button-zoom-in"
                   >
                     <ZoomIn className="w-4 h-4" />
@@ -472,7 +489,7 @@ export default function ImageUploader({
                   <Label className="text-white/80 text-sm">Contrast</Label>
                   <Slider
                     value={contrast}
-                    onValueChange={setContrast}
+                    onValueChange={(value) => updateState({ contrast: value })}
                     min={-100}
                     max={100}
                     step={10}
@@ -490,7 +507,7 @@ export default function ImageUploader({
                   <Label className="text-white/80 text-sm">Brightness</Label>
                   <Slider
                     value={brightness}
-                    onValueChange={setBrightness}
+                    onValueChange={(value) => updateState({ brightness: value })}
                     min={-100}
                     max={100}
                     step={10}
@@ -548,21 +565,23 @@ export default function ImageUploader({
 
       <Button
         onClick={async () => {
-          // added
+          if (!previewUrl) {
+            onContinue();
+            return;
+          }
           try {
-            if (!previewUrl) {
-              onContinue();
-              return;
-            }
             const file = await exportCroppedPngFromView(previewUrl);
-            onImageSelect(file); // 保留這行 (不要再依賴 previewUrl 判斷)
-            // added
-            onContinue(); // added
+            onImageSelect(file);
+
+            // 新增：建立臨時 URL 並打開新視窗檢查輸出結果
+            const debugUrl = URL.createObjectURL(file); // added
+            window.open(debugUrl, "_blank"); // added
+
+            requestAnimationFrame(() => onContinue());
           } catch (err) {
-            // added
-            console.error("Export failed:", err); // added
-            onContinue(); // 若你要失敗也繼續，可保留；要中止則把這行移除                      // added
-          } // added
+            console.error("Export process failed:", err);
+            requestAnimationFrame(() => onContinue());
+          }
         }}
         className="w-full h-12 bg-white/20 border border-white/30 text-white hover:bg-white/30"
         data-testid="button-continue"

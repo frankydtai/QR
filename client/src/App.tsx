@@ -13,11 +13,37 @@ import QRGenerator from "@/components/QRGenerator";
 
 type Step = 1 | 2 | 3 | 4;
 
+interface TextBox {
+  id: number;
+  x: number;
+  y: number;
+  text: string;
+}
+
+interface ImageEditState {
+  previewUrl: string | null;
+  imagePosition: { x: number; y: number };
+  imageScale: number;
+  contrast: number[];
+  brightness: number[];
+  fitScale: number;
+  textBoxes: TextBox[];
+}
+
 function QRCodeApp() {
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [selectedStyle, setSelectedStyle] = useState<QRStyle | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [url, setUrl] = useState<string>('');
+  const [imageEditState, setImageEditState] = useState<ImageEditState>({
+    previewUrl: null,
+    imagePosition: { x: 0, y: 0 },
+    imageScale: 1,
+    contrast: [0],
+    brightness: [0],
+    fitScale: 1,
+    textBoxes: [],
+  });
 
   const stepLabels = ['Style', 'Image', 'URL', 'Generate'];
 
@@ -50,6 +76,15 @@ function QRCodeApp() {
     setSelectedStyle(null);
     setSelectedImage(null);
     setUrl('');
+    setImageEditState({
+      previewUrl: null,
+      imagePosition: { x: 0, y: 0 },
+      imageScale: 1,
+      contrast: [0],
+      brightness: [0],
+      fitScale: 1,
+      textBoxes: [],
+    });
   };
 
   const renderCurrentStep = () => {
@@ -69,6 +104,8 @@ function QRCodeApp() {
             onImageSelect={handleImageSelect}
             onContinue={goToNextStep}
             onBack={goToPreviousStep}
+            imageEditState={imageEditState}
+            setImageEditState={setImageEditState}
           />
         );
       case 3:
