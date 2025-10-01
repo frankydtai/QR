@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Upload, X, ZoomIn, ZoomOut, Type } from "lucide-react";
+import { generateQrCodeUtil } from "@/lib/utils";
 
 interface TextBox {
   id: number;
@@ -46,6 +47,7 @@ export default function ImageUploader({
   const [draggingTextId, setDraggingTextId] = useState<number | null>(null);
   const [textDragStart, setTextDragStart] = useState({ x: 0, y: 0 });
   const [editingTextId, setEditingTextId] = useState<number | null>(null);
+  const [previewQR, setPreviewQR] = useState<string>("");
 
   const {
     previewUrl,
@@ -267,7 +269,7 @@ export default function ImageUploader({
         textBoxes.forEach((tb, index) => {
           console.log(`[Export Text Loop ${index}] Processing text box:`, tb);
 
-          const fontPx = 128;
+          const fontPx = 48;
           const fontWeight = 600;
           ctx.font = `${fontWeight} ${fontPx}px system-ui, -apple-system, Segoe UI, Roboto, Arial`;
           ctx.textBaseline = "top";
@@ -380,85 +382,102 @@ export default function ImageUploader({
                   }}
                   onWheel={handleWheel}
                   data-testid="image-edit-box"
-                  ref={containerRef} // ← patch ③ 會用到
+                  ref={containerRef}
                 >
-                  <img
-                    src={previewUrl}
-                    alt="Preview"
-                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none max-h-none select-none"
-                    style={getImageStyle()}
-                    onLoad={(e) => {
-                      const img = e.currentTarget;
-                      const nw = img.naturalWidth;
-                      const nh = img.naturalHeight;
-                      const box = containerRef.current?.getBoundingClientRect();
-                      const bw = box?.width ?? 256;
-                      const bh = box?.height ?? 256;
-                      const scale0 = Math.min(bw / nw, bh / nh);
-                      updateState({
-                        fitScale: scale0,
-                        imageScale: scale0,
-                        imagePosition: { x: 0, y: 0 },
-                      });
-                    }}
-                    onMouseDown={handleMouseDown}
-                    data-testid="image-preview"
-                    draggable={false}
-                  />
+                  {previewQR ? (
+                    <img
+                      src={previewQR}
+                      alt="Preview QR Code"
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none max-h-none select-none"
+                    />
+                  ) : (
+                    <>
+                      <img
+                        src={previewUrl}
+                        alt="Preview"
+                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none max-h-none select-none"
+                        style={getImageStyle()}
+                        onLoad={(e) => {
+                          const img = e.currentTarget;
+                          const nw = img.naturalWidth;
+                          const nh = img.naturalHeight;
+                          const box =
+                            containerRef.current?.getBoundingClientRect();
+                          const bw = box?.width ?? 256;
+                          const bh = box?.height ?? 256;
+                          const scale0 = Math.min(bw / nw, bh / nh);
+                          updateState({
+                            fitScale: scale0,
+                            imageScale: scale0,
+                            imagePosition: { x: 0, y: 0 },
+                          });
+                        }}
+                        onMouseDown={handleMouseDown}
+                        data-testid="image-preview"
+                        draggable={false}
+                      />
 
-                  {/* Text Overlays */}
-                  {textBoxes.map((textBox) => (
-                    <div
-                      key={textBox.id}
-                      className="absolute"
-                      style={{
-                        left: `${textBox.x}px`,
-                        top: `${textBox.y}px`,
-                        cursor:
-                          draggingTextId === textBox.id ? "grabbing" : "grab",
-                      }}
-                      onMouseDown={(e) => handleTextMouseDown(e, textBox.id)}
-                      onDoubleClick={() => handleTextDoubleClick(textBox.id)}
-                      data-testid={`text-box-${textBox.id}`}
-                    >
-                      {editingTextId === textBox.id ? (
-                        <input
-                          type="text"
-                          value={textBox.text}
-                          onChange={(e) =>
-                            handleTextChange(textBox.id, e.target.value)
-                          }
-                          onBlur={() => setEditingTextId(null)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") setEditingTextId(null);
+                      {/* Text Overlays */}
+                      {textBoxes.map((textBox) => (
+                        <div
+                          key={textBox.id}
+                          className="absolute"
+                          style={{
+                            left: `${textBox.x}px`,
+                            top: `${textBox.y}px`,
+                            cursor:
+                              draggingTextId === textBox.id
+                                ? "grabbing"
+                                : "grab",
                           }}
-                          autoFocus
-                          className="bg-white/90 text-black px-2 py-1 rounded border-2 border-blue-500 min-w-[100px]"
-                          data-testid={`text-input-${textBox.id}`}
-                        />
-                      ) : (
-                        <div className="relative group">
-                          <div className="bg-white/90 text-black px-2 py-1 rounded font-medium text-9xl select-none shadow-lg">
-                            {textBox.text}
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeTextBox(textBox.id);
-                            }}
-                            className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                            data-testid={`button-remove-text-${textBox.id}`}
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
+                          onMouseDown={(e) =>
+                            handleTextMouseDown(e, textBox.id)
+                          }
+                          onDoubleClick={() =>
+                            handleTextDoubleClick(textBox.id)
+                          }
+                          data-testid={`text-box-${textBox.id}`}
+                        >
+                          {editingTextId === textBox.id ? (
+                            <input
+                              type="text"
+                              value={textBox.text}
+                              onChange={(e) =>
+                                handleTextChange(textBox.id, e.target.value)
+                              }
+                              onBlur={() => setEditingTextId(null)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") setEditingTextId(null);
+                              }}
+                              autoFocus
+                              className="bg-white/90 text-black px-2 py-1 rounded border-2 border-blue-500 min-w-[100px]"
+                              data-testid={`text-input-${textBox.id}`}
+                            />
+                          ) : (
+                            <div className="relative group">
+                              <div className="bg-white/90 text-black px-2 py-1 rounded font-medium text-5xl select-none shadow-lg">
+                                {textBox.text}
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeTextBox(textBox.id);
+                                }}
+                                className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                data-testid={`button-remove-text-${textBox.id}`}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      ))}
 
-                  <div className="absolute top-2 left-2 text-white/60 text-xs">
-                    Drag to move • Scroll to zoom
-                  </div>
+                      <div className="absolute top-2 left-2 text-white/60 text-xs">
+                        Drag to move • Scroll to zoom
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* Zoom Controls */}
@@ -575,27 +594,62 @@ export default function ImageUploader({
         />
       </div>
 
-      <Button
-        onClick={async () => {
-          if (!previewUrl) {
-            onContinue();
-            return;
-          }
-          try {
-            const file = await exportCroppedPngFromView(previewUrl);
-            onImageSelect(file);
+      {/* Bottom action bar: left Preview, right Continue */}
+      <div className="flex items-center gap-3 mt-4">
+        {/* Left: Preview / Edit */}
+        {previewQR ? (
+          <Button
+            variant="outline"
+            className="h-12 flex-1 bg-white/10 border-white/40 text-white hover:bg-white/20"
+            onClick={() => setPreviewQR("")}
+            data-testid="button-edit"
+          >
+            Edit
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            className="h-12 flex-1 bg-white/10 border-white/40 text-white hover:bg-white/20"
+            onClick={async () => {
+              try {
+                const base64Image = await generateQrCodeUtil(
+                  "https://instagram.com",
+                  selectedImage || null,
+                );
+                setPreviewQR(base64Image);
+              } catch (err) {
+                console.error("Preview failed:", err);
+              }
+            }}
+            disabled={!selectedImage}
+            data-testid="button-preview"
+          >
+            Preview
+          </Button>
+        )}
 
-            requestAnimationFrame(() => onContinue());
-          } catch (err) {
-            console.error("Export process failed:", err);
-            requestAnimationFrame(() => onContinue());
-          }
-        }}
-        className="w-full h-12 bg-white/20 border border-white/30 text-white hover:bg-white/30"
-        data-testid="button-continue"
-      >
-        Continue
-      </Button>
+        {/* Right: Continue (keep existing onClick logic) */}
+        <Button
+          onClick={async () => {
+            if (!previewUrl) {
+              onContinue();
+              return;
+            }
+            try {
+              const file = await exportCroppedPngFromView(previewUrl);
+              onImageSelect(file);
+              requestAnimationFrame(() => onContinue());
+            } catch (err) {
+              console.error("Export process failed:", err);
+              requestAnimationFrame(() => onContinue());
+            }
+          }}
+          className="h-12 flex-1 bg-white/20 border border-white/30 text-white hover:bg-white/30"
+          data-testid="button-continue"
+        >
+          Continue
+        </Button>
+      </div>
     </div>
   );
 }
