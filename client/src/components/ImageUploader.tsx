@@ -47,7 +47,15 @@ export default function ImageUploader({
   const [textDragStart, setTextDragStart] = useState({ x: 0, y: 0 });
   const [editingTextId, setEditingTextId] = useState<number | null>(null);
 
-  const { previewUrl, imagePosition, imageScale, contrast, brightness, fitScale, textBoxes } = imageEditState;
+  const {
+    previewUrl,
+    imagePosition,
+    imageScale,
+    contrast,
+    brightness,
+    fitScale,
+    textBoxes,
+  } = imageEditState;
 
   const updateState = (updates: Partial<ImageEditState>) => {
     setImageEditState({ ...imageEditState, ...updates });
@@ -199,7 +207,9 @@ export default function ImageUploader({
 
   const handleTextChange = (id: number, newText: string) => {
     updateState({
-      textBoxes: textBoxes.map((t) => (t.id === id ? { ...t, text: newText } : t)),
+      textBoxes: textBoxes.map((t) =>
+        t.id === id ? { ...t, text: newText } : t,
+      ),
     });
   };
 
@@ -507,7 +517,9 @@ export default function ImageUploader({
                   <Label className="text-white/80 text-sm">Brightness</Label>
                   <Slider
                     value={brightness}
-                    onValueChange={(value) => updateState({ brightness: value })}
+                    onValueChange={(value) =>
+                      updateState({ brightness: value })
+                    }
                     min={-100}
                     max={100}
                     step={10}
@@ -572,10 +584,6 @@ export default function ImageUploader({
           try {
             const file = await exportCroppedPngFromView(previewUrl);
             onImageSelect(file);
-
-            // 新增：建立臨時 URL 並打開新視窗檢查輸出結果
-            const debugUrl = URL.createObjectURL(file); // added
-            window.open(debugUrl, "_blank"); // added
 
             requestAnimationFrame(() => onContinue());
           } catch (err) {
