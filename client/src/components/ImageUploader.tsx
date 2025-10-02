@@ -239,15 +239,70 @@ export default function ImageUploader({
 
   const handleRemoveBackground = async () => {
     if (!previewUrl) return;
-    
+
+    // 先同步开一个空白页，避免弹窗被拦
+    const previewWin = window.open("", "_blank");
+    if (previewWin) {
+      previewWin.document.write(`<!doctype html>
+  <html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Remove Background Preview</title>
+    <style>
+      html,body{height:100%;margin:0;background:#0b0b0f;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+      .wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;padding:24px;text-align:center}
+      img{max-width:90vw;max-height:80vh;border-radius:12px;display:block}
+      .btn{padding:10px 16px;border:1px solid #ffffff33;border-radius:10px;text-decoration:none;color:#fff;display:inline-block}
+      .muted{opacity:.7;font-size:14px}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div id="status">Processing…</div>
+    </div>
+  </body>
+  </html>`);
+      previewWin.document.close();
+    }
+
     setIsProcessing(true);
     try {
+      // 1) 取当前裁剪后的图片
       const file = await exportCroppedPngFromView(previewUrl);
-      const resultUrl = await removeBackground(file);
-      setRemovedBgImage(resultUrl);
+
+      // 2) 去背（你现有的实现）
+      const result = await removeBackground(file);
+
+      // 3) 统一成可用的 URL（支持 base64 string 或 Blob）
+      let url: string;
+      if (typeof result === "string") {
+        url = result.startsWith("data:")
+          ? result
+          : `data:image/png;base64,${result}`;
+      } else {
+        url = URL.createObjectURL(result);
+      }
+
+      // 可选：如果你有这段状态，就保留；没有可删
+      setRemovedBgImage(url);
+
+      // 4) 把结果写进刚才开的新页
+      if (previewWin) {
+        previewWin.document.body.innerHTML = `
+          <div class="wrap">
+            <img src="${url}" alt="Removed Background Result" />
+            <a class="btn" href="${url}" download="removed-bg.png">Download</a>
+            <div class="muted">This is a simple test page preview.</div>
+          </div>
+        `;
+      } else {
+        // 若被浏览器拦截弹窗，就直接打开图片
+        window.open(url, "_blank");
+      }
     } catch (error) {
       console.error("Background removal failed:", error);
-      alert("Failed to remove background. Please try again.");
+      // 你若不想 alert，可删掉下面这一行
+      //alert("Failed to remove background. Please try again.");
     } finally {
       setIsProcessing(false);
     }
@@ -371,18 +426,23 @@ export default function ImageUploader({
       {removedBgImage && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-6">
           <div className="bg-white rounded-lg max-w-2xl w-full p-6">
-            <h2 className="text-2xl font-bold mb-4 text-black">Background Removed</h2>
-            <div className="mb-4" style={{ 
-              backgroundColor: '#ffffff',
-              backgroundImage: `
+            <h2 className="text-2xl font-bold mb-4 text-black">
+              Background Removed
+            </h2>
+            <div
+              className="mb-4"
+              style={{
+                backgroundColor: "#ffffff",
+                backgroundImage: `
                 linear-gradient(45deg, #ccc 25%, transparent 25%), 
                 linear-gradient(-45deg, #ccc 25%, transparent 25%), 
                 linear-gradient(45deg, transparent 75%, #ccc 75%), 
                 linear-gradient(-45deg, transparent 75%, #ccc 75%)
               `,
-              backgroundSize: '20px 20px',
-              backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px'
-            }}>
+                backgroundSize: "20px 20px",
+                backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
+              }}
+            >
               <img
                 src={removedBgImage}
                 alt="Background Removed"
@@ -392,9 +452,9 @@ export default function ImageUploader({
             <div className="flex gap-3">
               <Button
                 onClick={() => {
-                  const link = document.createElement('a');
+                  const link = document.createElement("a");
                   link.href = removedBgImage;
-                  link.download = 'background-removed.png';
+                  link.download = "background-removed.png";
                   link.click();
                 }}
                 className="flex-1"
@@ -566,14 +626,15 @@ export default function ImageUploader({
                 </div>
                 {previewQR && (
                   <>
+                    {/* Remove Background Button */}
                     <Button
                       variant="outline"
-                      onClick={addTextBox}
+                      onClick={handleRemoveBackground}
+                      disabled={isProcessing}
                       className="w-full mb-4 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                      data-testid="button-add-text"
+                      data-testid="button-remove-bg"
                     >
-                      <Type className="w-4 h-4 mr-2" />
-                      Remove Background
+                      {isProcessing ? "Processing..." : "Remove Background"}
                     </Button>
                   </>
                 )}
@@ -663,17 +724,6 @@ export default function ImageUploader({
                     >
                       <Type className="w-4 h-4 mr-2" />
                       Text
-                    </Button>
-
-                    {/* Remove Background Button */}
-                    <Button
-                      variant="outline"
-                      onClick={handleRemoveBackground}
-                      disabled={isProcessing}
-                      className="w-full mb-4 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                      data-testid="button-remove-bg"
-                    >
-                      {isProcessing ? "Processing..." : "Remove Background"}
                     </Button>
 
                     <Button
