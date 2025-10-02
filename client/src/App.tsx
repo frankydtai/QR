@@ -28,6 +28,7 @@ interface ImageEditState {
   brightness: number[];
   fitScale: number;
   textBoxes: TextBox[];
+  didInit: boolean;
 }
 
 function QRCodeApp() {
@@ -44,6 +45,7 @@ function QRCodeApp() {
     brightness: [0],
     fitScale: 1,
     textBoxes: [],
+    didInit: false,
   });
 
   const stepLabels = ["Style", "Image", "URL", "Generate"];
@@ -92,6 +94,7 @@ function QRCodeApp() {
       brightness: [0],
       fitScale: 1,
       textBoxes: [],
+      didInit: false,
     });
   };
 

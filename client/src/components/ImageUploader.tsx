@@ -5,6 +5,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Upload, X, ZoomIn, ZoomOut, Type } from "lucide-react";
 import { generateQrCodeUtil } from "@/lib/utils";
+import { removeBackground } from "@/lib/removeBG";
 
 interface TextBox {
   id: number;
@@ -54,11 +55,13 @@ export default function ImageUploader({
   const [draggingTextId, setDraggingTextId] = useState<number | null>(null);
   const [textDragStart, setTextDragStart] = useState({ x: 0, y: 0 });
   const [editingTextId, setEditingTextId] = useState<number | null>(null);
+  const [removedBgImage, setRemovedBgImage] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   //const [previewQR, setPreviewQR] = useState<string>("");
 
   useEffect(() => {
     setPreviewQR(""); // 回到页面时强制重置为 Edit
-  }, []);
+  }, [setPreviewQR]);
 
   const {
     previewUrl,
@@ -234,6 +237,22 @@ export default function ImageUploader({
     });
   };
 
+  const handleRemoveBackground = async () => {
+    if (!previewUrl) return;
+    
+    setIsProcessing(true);
+    try {
+      const file = await exportCroppedPngFromView(previewUrl);
+      const resultUrl = await removeBackground(file);
+      setRemovedBgImage(resultUrl);
+    } catch (error) {
+      console.error("Background removal failed:", error);
+      alert("Failed to remove background. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   async function exportCroppedPngFromView(previewUrl: string): Promise<File> {
     console.log("[Export Start] Beginning export process...");
     console.log("[Export State] Text boxes to be rendered:", textBoxes); // IMPORTANT: Check this first
@@ -347,6 +366,54 @@ export default function ImageUploader({
       >
         ← Back
       </button>
+
+      {/* Background Removal Result Modal */}
+      {removedBgImage && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-6">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6">
+            <h2 className="text-2xl font-bold mb-4 text-black">Background Removed</h2>
+            <div className="mb-4" style={{ 
+              backgroundColor: '#ffffff',
+              backgroundImage: `
+                linear-gradient(45deg, #ccc 25%, transparent 25%), 
+                linear-gradient(-45deg, #ccc 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #ccc 75%), 
+                linear-gradient(-45deg, transparent 75%, #ccc 75%)
+              `,
+              backgroundSize: '20px 20px',
+              backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px'
+            }}>
+              <img
+                src={removedBgImage}
+                alt="Background Removed"
+                className="w-full h-auto"
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = removedBgImage;
+                  link.download = 'background-removed.png';
+                  link.click();
+                }}
+                className="flex-1"
+                data-testid="button-download-bg"
+              >
+                Download
+              </Button>
+              <Button
+                onClick={() => setRemovedBgImage(null)}
+                variant="outline"
+                className="flex-1"
+                data-testid="button-close-bg"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="text-center mb-8">
         <h1
@@ -591,11 +658,22 @@ export default function ImageUploader({
                     <Button
                       variant="outline"
                       onClick={addTextBox}
-                      className="w-full mb-4 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                      className="w-full mb-2 bg-white/10 border-white/30 text-white hover:bg-white/20"
                       data-testid="button-add-text"
                     >
                       <Type className="w-4 h-4 mr-2" />
                       Text
+                    </Button>
+
+                    {/* Remove Background Button */}
+                    <Button
+                      variant="outline"
+                      onClick={handleRemoveBackground}
+                      disabled={isProcessing}
+                      className="w-full mb-4 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                      data-testid="button-remove-bg"
+                    >
+                      {isProcessing ? "Processing..." : "Remove Background"}
                     </Button>
 
                     <Button
