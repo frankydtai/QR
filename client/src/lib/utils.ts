@@ -38,7 +38,7 @@ export async function generateQrCodeUtil(
 
     const options: any = {
       // encodeOption
-      encodeVersion: 0, // 0 = let library choose
+      encodeVersion: 7, // 0 = let library choose
       encodeMode: 0, // 0=auto (可先不傳也行)
       encodeECLevel: "H",
       // outputOption

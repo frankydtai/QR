@@ -7,11 +7,12 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import ThemeToggle from "@/components/ThemeToggle";
 import ProgressIndicator from "@/components/ProgressIndicator";
 import QRModelSelector, { type QRStyle } from "@/components/QRModelSelector";
-import ImageUploader from "@/components/ImageUploader";
-import URLInput from "@/components/URLInput";
-import QRGenerator from "@/components/QRGenerator";
+import ImageUploader from "@/components/ImageUploader"; // Step 2: Edit
+import PreviewPage from "@/components/PreviewPage"; // Step 3: Preview（新增）
+import URLInput from "@/components/URLInput"; // Step 4
+import QRGenerator from "@/components/QRGenerator"; // Step 5
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3 | 4 | 5;
 
 interface TextBox {
   id: number;
@@ -36,7 +37,11 @@ function QRCodeApp() {
   const [selectedStyle, setSelectedStyle] = useState<QRStyle | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [url, setUrl] = useState<string>("");
+
+  // 预览页使用的 QR 预览（从 ImageUploader 迁移保留）
   const [previewQR, setPreviewQR] = useState<string>("");
+
+  // Edit 页使用的原图及几何/文字等编辑状态
   const [imageEditState, setImageEditState] = useState<ImageEditState>({
     previewUrl: null,
     imagePosition: { x: 0, y: 0 },
@@ -48,7 +53,8 @@ function QRCodeApp() {
     didInit: false,
   });
 
-  const stepLabels = ["Style", "Image", "URL", "Generate"];
+  // 更新步名称：Style → Edit → Preview → URL → Generate
+  const stepLabels = ["Style", "Edit", "Preview", "URL", "Generate"];
 
   const handleStyleSelect = (style: QRStyle) => {
     setSelectedStyle(style);
@@ -63,7 +69,7 @@ function QRCodeApp() {
   };
 
   const goToNextStep = () => {
-    if (currentStep < 4) {
+    if (currentStep < 5) {
       setCurrentStep((prev) => (prev + 1) as Step);
     }
   };
@@ -72,8 +78,9 @@ function QRCodeApp() {
     if (currentStep > 1) {
       setCurrentStep((prev) => {
         const next = (prev - 1) as Step;
+        // 回到 Edit（Step 2）时，清理 Preview 态
         if (next === 2) {
-          setPreviewQR(""); // 回到 Step 2 时清空 Preview
+          setPreviewQR("");
         }
         return next;
       });
@@ -85,7 +92,7 @@ function QRCodeApp() {
     setSelectedStyle(null);
     setSelectedImage(null);
     setUrl("");
-    setPreviewQR(""); // 新增：把预览也清空
+    setPreviewQR(""); // 清空预览
     setImageEditState({
       previewUrl: null,
       imagePosition: { x: 0, y: 0 },
@@ -109,11 +116,11 @@ function QRCodeApp() {
             }}
           />
         );
-      case 2:
+      case 2: // Edit
         return (
           <ImageUploader
             onImageSelect={handleImageSelect}
-            onContinue={goToNextStep}
+            onContinue={goToNextStep} // 进入 Preview（Step 3）
             onBack={goToPreviousStep}
             imageEditState={imageEditState}
             setImageEditState={setImageEditState}
@@ -122,21 +129,32 @@ function QRCodeApp() {
             setPreviewQR={setPreviewQR}
           />
         );
-      case 3:
+      case 3: // Preview（新增页面：去背/亮度/对比与 QR 生成）
+        return (
+          <PreviewPage
+            onContinue={goToNextStep} // 进入 URL（Step 4）
+            onBack={goToPreviousStep} // 回 Edit（Step 2）
+            imageEditState={imageEditState}
+            selectedImage={selectedImage}
+            previewQR={previewQR}
+            setPreviewQR={setPreviewQR}
+          />
+        );
+      case 4: // URL
         return (
           <URLInput
             onURLChange={handleURLChange}
-            onContinue={goToNextStep}
-            onBack={goToPreviousStep}
+            onContinue={goToNextStep} // 进入 Generate（Step 5）
+            onBack={goToPreviousStep} // 回 Preview（Step 3）
           />
         );
-      case 4:
+      case 5: // Generate
         return (
           <QRGenerator
             url={url}
             style={selectedStyle!}
             image={selectedImage}
-            onBack={goToPreviousStep}
+            onBack={goToPreviousStep} // 回 URL（Step 4）
           />
         );
       default:
@@ -146,9 +164,11 @@ function QRCodeApp() {
 
   return (
     <div className="min-h-screen">
-      {/* Main Content */}
+      {/* 这里可放进度条/主题切换等 UI */}
+      {/* <ThemeToggle /> */}
+      {/* <ProgressIndicator current={currentStep} labels={stepLabels} /> */}
+
       <main className="pt-12 pb-6">
-        {/* Current Step Content */}
         <div className="px-4">{renderCurrentStep()}</div>
       </main>
     </div>

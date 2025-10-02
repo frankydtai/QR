@@ -1,11 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Slider } from "@/components/ui/slider";
-import { Label } from "@/components/ui/label";
 import { Upload, X, ZoomIn, ZoomOut, Type } from "lucide-react";
 import { generateQrCodeUtil } from "@/lib/utils";
-import { removeBackground } from "@/lib/removeBG";
 
 interface TextBox {
   id: number;
@@ -55,8 +52,6 @@ export default function ImageUploader({
   const [draggingTextId, setDraggingTextId] = useState<number | null>(null);
   const [textDragStart, setTextDragStart] = useState({ x: 0, y: 0 });
   const [editingTextId, setEditingTextId] = useState<number | null>(null);
-  const [removedBgImage, setRemovedBgImage] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   //const [previewQR, setPreviewQR] = useState<string>("");
 
   useEffect(() => {
@@ -168,7 +163,6 @@ export default function ImageUploader({
 
   const getImageStyle = () => ({
     transform: `translate(-50%, -50%) translate(${imagePosition.x}px, ${imagePosition.y}px) scale(${imageScale})`,
-    filter: `contrast(${100 + contrast[0]}%) brightness(${100 + brightness[0]}%)`,
     cursor: isDragging ? "grabbing" : "grab",
   });
 
@@ -235,77 +229,6 @@ export default function ImageUploader({
     updateState({
       textBoxes: textBoxes.filter((t) => t.id !== id),
     });
-  };
-
-  const handleRemoveBackground = async () => {
-    if (!previewUrl) return;
-
-    // 先同步开一个空白页，避免弹窗被拦
-    const previewWin = window.open("", "_blank");
-    if (previewWin) {
-      previewWin.document.write(`<!doctype html>
-  <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Remove Background Preview</title>
-    <style>
-      html,body{height:100%;margin:0;background:#0b0b0f;color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
-      .wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;padding:24px;text-align:center}
-      img{max-width:90vw;max-height:80vh;border-radius:12px;display:block}
-      .btn{padding:10px 16px;border:1px solid #ffffff33;border-radius:10px;text-decoration:none;color:#fff;display:inline-block}
-      .muted{opacity:.7;font-size:14px}
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <div id="status">Processing…</div>
-    </div>
-  </body>
-  </html>`);
-      previewWin.document.close();
-    }
-
-    setIsProcessing(true);
-    try {
-      // 1) 取当前裁剪后的图片
-      const file = await exportCroppedPngFromView(previewUrl);
-
-      // 2) 去背（你现有的实现）
-      const result = await removeBackground(file);
-
-      // 3) 统一成可用的 URL（支持 base64 string 或 Blob）
-      let url: string;
-      if (typeof result === "string") {
-        url = result.startsWith("data:")
-          ? result
-          : `data:image/png;base64,${result}`;
-      } else {
-        url = URL.createObjectURL(result);
-      }
-
-      // 可选：如果你有这段状态，就保留；没有可删
-      setRemovedBgImage(url);
-
-      // 4) 把结果写进刚才开的新页
-      if (previewWin) {
-        previewWin.document.body.innerHTML = `
-          <div class="wrap">
-            <img src="${url}" alt="Removed Background Result" />
-            <a class="btn" href="${url}" download="removed-bg.png">Download</a>
-            <div class="muted">This is a simple test page preview.</div>
-          </div>
-        `;
-      } else {
-        // 若被浏览器拦截弹窗，就直接打开图片
-        window.open(url, "_blank");
-      }
-    } catch (error) {
-      console.error("Background removal failed:", error);
-      // 你若不想 alert，可删掉下面这一行
-      //alert("Failed to remove background. Please try again.");
-    } finally {
-      setIsProcessing(false);
-    }
   };
 
   async function exportCroppedPngFromView(previewUrl: string): Promise<File> {
@@ -421,59 +344,6 @@ export default function ImageUploader({
       >
         ← Back
       </button>
-
-      {/* Background Removal Result Modal */}
-      {removedBgImage && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-6">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6">
-            <h2 className="text-2xl font-bold mb-4 text-black">
-              Background Removed
-            </h2>
-            <div
-              className="mb-4"
-              style={{
-                backgroundColor: "#ffffff",
-                backgroundImage: `
-                linear-gradient(45deg, #ccc 25%, transparent 25%), 
-                linear-gradient(-45deg, #ccc 25%, transparent 25%), 
-                linear-gradient(45deg, transparent 75%, #ccc 75%), 
-                linear-gradient(-45deg, transparent 75%, #ccc 75%)
-              `,
-                backgroundSize: "20px 20px",
-                backgroundPosition: "0 0, 0 10px, 10px -10px, -10px 0px",
-              }}
-            >
-              <img
-                src={removedBgImage}
-                alt="Background Removed"
-                className="w-full h-auto"
-              />
-            </div>
-            <div className="flex gap-3">
-              <Button
-                onClick={() => {
-                  const link = document.createElement("a");
-                  link.href = removedBgImage;
-                  link.download = "background-removed.png";
-                  link.click();
-                }}
-                className="flex-1"
-                data-testid="button-download-bg"
-              >
-                Download
-              </Button>
-              <Button
-                onClick={() => setRemovedBgImage(null)}
-                variant="outline"
-                className="flex-1"
-                data-testid="button-close-bg"
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="text-center mb-8">
         <h1
@@ -626,6 +496,47 @@ export default function ImageUploader({
                 </div>
                 {previewQR && (
                   <>
+                    {/* Contrast Slider */}
+                    <div className="space-y-2 mb-4">
+                      <Label className="text-white/80 text-sm">Contrast</Label>
+                      <Slider
+                        value={contrast}
+                        onValueChange={(value) =>
+                          updateState({ contrast: value })
+                        }
+                        min={-100}
+                        max={100}
+                        step={10}
+                        className="w-full"
+                        data-testid="slider-contrast"
+                      />
+                      <div className="text-center text-white/60 text-xs">
+                        {contrast[0] > 0 ? "+" : ""}
+                        {contrast[0]}
+                      </div>
+                    </div>
+
+                    {/* Brightness Slider */}
+                    <div className="space-y-2 mb-4">
+                      <Label className="text-white/80 text-sm">
+                        Brightness
+                      </Label>
+                      <Slider
+                        value={brightness}
+                        onValueChange={(value) =>
+                          updateState({ brightness: value })
+                        }
+                        min={-100}
+                        max={100}
+                        step={10}
+                        className="w-full"
+                        data-testid="slider-brightness"
+                      />
+                      <div className="text-center text-white/60 text-xs">
+                        {brightness[0] > 0 ? "+" : ""}
+                        {brightness[0]}
+                      </div>
+                    </div>
                     {/* Remove Background Button */}
                     <Button
                       variant="outline"
@@ -673,48 +584,6 @@ export default function ImageUploader({
                       </Button>
                     </div>
 
-                    {/* Contrast Slider */}
-                    <div className="space-y-2 mb-4">
-                      <Label className="text-white/80 text-sm">Contrast</Label>
-                      <Slider
-                        value={contrast}
-                        onValueChange={(value) =>
-                          updateState({ contrast: value })
-                        }
-                        min={-100}
-                        max={100}
-                        step={10}
-                        className="w-full"
-                        data-testid="slider-contrast"
-                      />
-                      <div className="text-center text-white/60 text-xs">
-                        {contrast[0] > 0 ? "+" : ""}
-                        {contrast[0]}
-                      </div>
-                    </div>
-
-                    {/* Brightness Slider */}
-                    <div className="space-y-2 mb-4">
-                      <Label className="text-white/80 text-sm">
-                        Brightness
-                      </Label>
-                      <Slider
-                        value={brightness}
-                        onValueChange={(value) =>
-                          updateState({ brightness: value })
-                        }
-                        min={-100}
-                        max={100}
-                        step={10}
-                        className="w-full"
-                        data-testid="slider-brightness"
-                      />
-                      <div className="text-center text-white/60 text-xs">
-                        {brightness[0] > 0 ? "+" : ""}
-                        {brightness[0]}
-                      </div>
-                    </div>
-
                     {/* Add Text Button */}
                     <Button
                       variant="outline"
@@ -760,67 +629,36 @@ export default function ImageUploader({
         />
       </div>
 
-      {/* Bottom action bar: left Preview, right Continue */}
-      <div className="flex items-center gap-3 mt-4">
-        {/* Left: Preview / Edit */}
-        {previewQR ? (
-          <Button
-            variant="outline"
-            className="h-12 flex-1 bg-white/10 border-white/40 text-white hover:bg-white/20"
-            onClick={() => setPreviewQR("")}
-            data-testid="button-edit"
-          >
-            Edit
-          </Button>
-        ) : (
-          <Button
-            variant="outline"
-            className="h-12 flex-1 bg-white/10 border-white/40 text-white hover:bg-white/20"
-            onClick={async () => {
-              if (!previewUrl) {
-                return;
-              }
-              try {
-                const file = await exportCroppedPngFromView(previewUrl);
-                onImageSelect(file);
-                const base64Image = await generateQrCodeUtil(
-                  "https://instagram.com",
-                  file,
-                );
-                setPreviewQR(base64Image);
-              } catch (err) {
-                console.error("Preview failed:", err);
-              }
-            }}
-            disabled={!previewUrl}
-            data-testid="button-preview"
-          >
-            Preview
-          </Button>
-        )}
+      <Button
+        onClick={async () => {
+          if (!previewUrl) return; // 必须有上传图
 
-        {/* Right: Continue (keep existing onClick logic) */}
-        <Button
-          onClick={async () => {
-            if (!previewUrl) {
-              onContinue();
-              return;
-            }
-            try {
-              const file = await exportCroppedPngFromView(previewUrl);
-              onImageSelect(file);
-              requestAnimationFrame(() => onContinue());
-            } catch (err) {
-              console.error("Export process failed:", err);
-              requestAnimationFrame(() => onContinue());
-            }
-          }}
-          className="h-12 flex-1 bg-white/20 border border-white/30 text-white hover:bg-white/30"
-          data-testid="button-continue"
-        >
-          Continue
-        </Button>
-      </div>
+          try {
+            // ① 从编辑视图导出当前裁剪（含拖拽/缩放/文字；若你有预览滤镜覆盖，这里用“Edit版”的导出函数）
+            const file = await exportForEdit(previewUrl);
+            // 若你还没新建 exportForEdit，也可以用你现有的 exportCroppedPngFromView(previewUrl)
+
+            // ② 回写父层，确保下一页也用这张图
+            onImageSelect(file);
+
+            // ③ 生成预览 QR（原来 Preview 按钮的逻辑）
+            const base64Image = await generateQrCodeUtil(
+              "https://instagram.com",
+              file,
+            );
+            setPreviewQR(base64Image);
+
+            // ④ 跳到下一页（Preview Page）
+            onContinue();
+          } catch (err) {
+            console.error("Continue->Preview failed:", err);
+          }
+        }}
+        className="w-full h-12 bg-white/20 border border-white/30 text-white hover:bg-white/30 rounded-md"
+        data-testid="button-continue"
+      >
+        Continue
+      </Button>
     </div>
   );
 }
