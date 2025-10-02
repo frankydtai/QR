@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
@@ -21,6 +21,7 @@ interface ImageEditState {
   brightness: number[];
   fitScale: number;
   textBoxes: TextBox[];
+  didInit: boolean;
 }
 
 interface ImageUploaderProps {
@@ -29,6 +30,9 @@ interface ImageUploaderProps {
   onBack: () => void;
   imageEditState: ImageEditState;
   setImageEditState: (state: ImageEditState) => void;
+  selectedImage: File | null;
+  previewQR: string;
+  setPreviewQR: (v: string) => void;
 }
 
 export default function ImageUploader({
@@ -37,8 +41,11 @@ export default function ImageUploader({
   onBack,
   imageEditState,
   setImageEditState,
+  selectedImage,
+  previewQR,
+  setPreviewQR,
 }: ImageUploaderProps) {
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  //const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -47,7 +54,11 @@ export default function ImageUploader({
   const [draggingTextId, setDraggingTextId] = useState<number | null>(null);
   const [textDragStart, setTextDragStart] = useState({ x: 0, y: 0 });
   const [editingTextId, setEditingTextId] = useState<number | null>(null);
-  const [previewQR, setPreviewQR] = useState<string>("");
+  //const [previewQR, setPreviewQR] = useState<string>("");
+
+  useEffect(() => {
+    setPreviewQR(""); // 回到页面时强制重置为 Edit
+  }, []);
 
   const {
     previewUrl,
@@ -69,8 +80,8 @@ export default function ImageUploader({
       return;
     }
 
-    setSelectedImage(file);
-    onImageSelect(file);
+    //setSelectedImage(file);
+    //onImageSelect(file);
 
     const url = URL.createObjectURL(file);
     updateState({
@@ -80,6 +91,7 @@ export default function ImageUploader({
       fitScale: 1,
       contrast: [0],
       brightness: [0],
+      didInit: false,
     });
 
     console.log("Image selected:", file.name);
@@ -101,7 +113,7 @@ export default function ImageUploader({
   };
 
   const removeImage = () => {
-    setSelectedImage(null);
+    //setSelectedImage(null);
     updateState({
       previewUrl: null,
       imagePosition: { x: 0, y: 0 },
@@ -110,8 +122,9 @@ export default function ImageUploader({
       contrast: [0],
       brightness: [0],
       textBoxes: [],
+      didInit: false,
     });
-    onImageSelect(null);
+    //onImageSelect(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -289,7 +302,7 @@ export default function ImageUploader({
 
           // Background
           ctx.fillStyle = "rgba(255,255,255,0.9)";
-          ctx.fillRect(boxX, boxY, boxW, boxH); // Using simple fillRect for now to eliminate custom function as a variable
+          ctx.fillRect(boxX, boxY, boxW, boxH);
 
           // Text
           ctx.fillStyle = "#000";
@@ -388,7 +401,7 @@ export default function ImageUploader({
                     <img
                       src={previewQR}
                       alt="Preview QR Code"
-                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none max-h-none select-none"
+                      className="absolute inset-0 w-full h-full object-contain select-none"
                     />
                   ) : (
                     <>
@@ -406,11 +419,16 @@ export default function ImageUploader({
                           const bw = box?.width ?? 256;
                           const bh = box?.height ?? 256;
                           const scale0 = Math.min(bw / nw, bh / nh);
-                          updateState({
-                            fitScale: scale0,
-                            imageScale: scale0,
-                            imagePosition: { x: 0, y: 0 },
-                          });
+
+                          // Only initialize the values when didInit is false
+                          if (!imageEditState.didInit) {
+                            updateState({
+                              fitScale: scale0,
+                              imageScale: scale0,
+                              imagePosition: { x: 0, y: 0 },
+                              didInit: true,
+                            });
+                          }
                         }}
                         onMouseDown={handleMouseDown}
                         data-testid="image-preview"
@@ -479,107 +497,127 @@ export default function ImageUploader({
                     </>
                   )}
                 </div>
+                {previewQR && (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={addTextBox}
+                      className="w-full mb-4 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                      data-testid="button-add-text"
+                    >
+                      <Type className="w-4 h-4 mr-2" />
+                      Remove Background
+                    </Button>
+                  </>
+                )}
+                {!previewQR && (
+                  <>
+                    {/* Zoom Controls */}
+                    <div className="flex items-center justify-center gap-2 mb-4">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="w-8 h-8 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                        onClick={() => {
+                          const minS = fitScale * 0.1;
+                          const newScale = Math.max(minS, imageScale - 0.1);
+                          updateState({ imageScale: newScale });
+                        }}
+                        data-testid="button-zoom-out"
+                      >
+                        <ZoomOut className="w-4 h-4" />
+                      </Button>
+                      <span className="text-white/80 text-sm min-w-12 text-center">
+                        {Math.round((imageScale / fitScale) * 100)}%
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="w-8 h-8 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                        onClick={() => {
+                          const maxS = fitScale * 3;
+                          const newScale = Math.min(maxS, imageScale + 0.1);
+                          updateState({ imageScale: newScale });
+                        }}
+                        data-testid="button-zoom-in"
+                      >
+                        <ZoomIn className="w-4 h-4" />
+                      </Button>
+                    </div>
 
-                {/* Zoom Controls */}
-                <div className="flex items-center justify-center gap-2 mb-4">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="w-8 h-8 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                    onClick={() => {
-                      const minS = fitScale * 0.1;
-                      const newScale = Math.max(minS, imageScale - 0.1);
-                      updateState({ imageScale: newScale });
-                    }}
-                    data-testid="button-zoom-out"
-                  >
-                    <ZoomOut className="w-4 h-4" />
-                  </Button>
-                  <span className="text-white/80 text-sm min-w-12 text-center">
-                    {Math.round((imageScale / fitScale) * 100)}%
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="w-8 h-8 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                    onClick={() => {
-                      const maxS = fitScale * 3;
-                      const newScale = Math.min(maxS, imageScale + 0.1);
-                      updateState({ imageScale: newScale });
-                    }}
-                    data-testid="button-zoom-in"
-                  >
-                    <ZoomIn className="w-4 h-4" />
-                  </Button>
-                </div>
+                    {/* Contrast Slider */}
+                    <div className="space-y-2 mb-4">
+                      <Label className="text-white/80 text-sm">Contrast</Label>
+                      <Slider
+                        value={contrast}
+                        onValueChange={(value) =>
+                          updateState({ contrast: value })
+                        }
+                        min={-100}
+                        max={100}
+                        step={10}
+                        className="w-full"
+                        data-testid="slider-contrast"
+                      />
+                      <div className="text-center text-white/60 text-xs">
+                        {contrast[0] > 0 ? "+" : ""}
+                        {contrast[0]}
+                      </div>
+                    </div>
 
-                {/* Contrast Slider */}
-                <div className="space-y-2 mb-4">
-                  <Label className="text-white/80 text-sm">Contrast</Label>
-                  <Slider
-                    value={contrast}
-                    onValueChange={(value) => updateState({ contrast: value })}
-                    min={-100}
-                    max={100}
-                    step={10}
-                    className="w-full"
-                    data-testid="slider-contrast"
-                  />
-                  <div className="text-center text-white/60 text-xs">
-                    {contrast[0] > 0 ? "+" : ""}
-                    {contrast[0]}
-                  </div>
-                </div>
+                    {/* Brightness Slider */}
+                    <div className="space-y-2 mb-4">
+                      <Label className="text-white/80 text-sm">
+                        Brightness
+                      </Label>
+                      <Slider
+                        value={brightness}
+                        onValueChange={(value) =>
+                          updateState({ brightness: value })
+                        }
+                        min={-100}
+                        max={100}
+                        step={10}
+                        className="w-full"
+                        data-testid="slider-brightness"
+                      />
+                      <div className="text-center text-white/60 text-xs">
+                        {brightness[0] > 0 ? "+" : ""}
+                        {brightness[0]}
+                      </div>
+                    </div>
 
-                {/* Brightness Slider */}
-                <div className="space-y-2 mb-4">
-                  <Label className="text-white/80 text-sm">Brightness</Label>
-                  <Slider
-                    value={brightness}
-                    onValueChange={(value) =>
-                      updateState({ brightness: value })
-                    }
-                    min={-100}
-                    max={100}
-                    step={10}
-                    className="w-full"
-                    data-testid="slider-brightness"
-                  />
-                  <div className="text-center text-white/60 text-xs">
-                    {brightness[0] > 0 ? "+" : ""}
-                    {brightness[0]}
-                  </div>
-                </div>
+                    {/* Add Text Button */}
+                    <Button
+                      variant="outline"
+                      onClick={addTextBox}
+                      className="w-full mb-4 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                      data-testid="button-add-text"
+                    >
+                      <Type className="w-4 h-4 mr-2" />
+                      Text
+                    </Button>
 
-                {/* Add Text Button */}
-                <Button
-                  variant="outline"
-                  onClick={addTextBox}
-                  className="w-full mb-4 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                  data-testid="button-add-text"
-                >
-                  <Type className="w-4 h-4 mr-2" />
-                  Text
-                </Button>
-
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  className="absolute -top-2 -right-2 w-6 h-6"
-                  onClick={removeImage}
-                  data-testid="button-remove-image"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute -top-2 -right-2 w-6 h-6"
+                      onClick={removeImage}
+                      data-testid="button-remove-image"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </>
+                )}
               </div>
-              <div className="text-center">
+              {/* <div className="text-center">
                 <p className="text-sm font-medium truncate text-white">
                   {selectedImage?.name}
                 </p>
                 <p className="text-xs text-white/60">
                   {selectedImage && (selectedImage.size / 1024).toFixed(1)} KB
                 </p>
-              </div>
+              </div> */}
             </Card>
           </div>
         )}
@@ -611,17 +649,22 @@ export default function ImageUploader({
             variant="outline"
             className="h-12 flex-1 bg-white/10 border-white/40 text-white hover:bg-white/20"
             onClick={async () => {
+              if (!previewUrl) {
+                return;
+              }
               try {
+                const file = await exportCroppedPngFromView(previewUrl);
+                onImageSelect(file);
                 const base64Image = await generateQrCodeUtil(
                   "https://instagram.com",
-                  selectedImage || null,
+                  file,
                 );
                 setPreviewQR(base64Image);
               } catch (err) {
                 console.error("Preview failed:", err);
               }
             }}
-            disabled={!selectedImage}
+            disabled={!previewUrl}
             data-testid="button-preview"
           >
             Preview

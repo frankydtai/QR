@@ -34,7 +34,8 @@ function QRCodeApp() {
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [selectedStyle, setSelectedStyle] = useState<QRStyle | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [url, setUrl] = useState<string>('');
+  const [url, setUrl] = useState<string>("");
+  const [previewQR, setPreviewQR] = useState<string>("");
   const [imageEditState, setImageEditState] = useState<ImageEditState>({
     previewUrl: null,
     imagePosition: { x: 0, y: 0 },
@@ -45,7 +46,7 @@ function QRCodeApp() {
     textBoxes: [],
   });
 
-  const stepLabels = ['Style', 'Image', 'URL', 'Generate'];
+  const stepLabels = ["Style", "Image", "URL", "Generate"];
 
   const handleStyleSelect = (style: QRStyle) => {
     setSelectedStyle(style);
@@ -67,7 +68,13 @@ function QRCodeApp() {
 
   const goToPreviousStep = () => {
     if (currentStep > 1) {
-      setCurrentStep((prev) => (prev - 1) as Step);
+      setCurrentStep((prev) => {
+        const next = (prev - 1) as Step;
+        if (next === 2) {
+          setPreviewQR(""); // 回到 Step 2 时清空 Preview
+        }
+        return next;
+      });
     }
   };
 
@@ -75,7 +82,8 @@ function QRCodeApp() {
     setCurrentStep(1);
     setSelectedStyle(null);
     setSelectedImage(null);
-    setUrl('');
+    setUrl("");
+    setPreviewQR(""); // 新增：把预览也清空
     setImageEditState({
       previewUrl: null,
       imagePosition: { x: 0, y: 0 },
@@ -106,6 +114,9 @@ function QRCodeApp() {
             onBack={goToPreviousStep}
             imageEditState={imageEditState}
             setImageEditState={setImageEditState}
+            selectedImage={selectedImage}
+            previewQR={previewQR}
+            setPreviewQR={setPreviewQR}
           />
         );
       case 3:
@@ -135,9 +146,7 @@ function QRCodeApp() {
       {/* Main Content */}
       <main className="pt-12 pb-6">
         {/* Current Step Content */}
-        <div className="px-4">
-          {renderCurrentStep()}
-        </div>
+        <div className="px-4">{renderCurrentStep()}</div>
       </main>
     </div>
   );
