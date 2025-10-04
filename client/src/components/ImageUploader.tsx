@@ -15,8 +15,6 @@ interface ImageEditState {
   previewUrl: string | null;
   imagePosition: { x: number; y: number };
   imageScale: number;
-  contrast: number[];
-  brightness: number[];
   fitScale: number;
   textBoxes: TextBox[];
   didInit: boolean;
@@ -39,7 +37,6 @@ export default function ImageUploader({
   onBack,
   imageEditState,
   setImageEditState,
-  selectedImage,
   previewQR,
   setPreviewQR,
 }: ImageUploaderProps) {
@@ -54,19 +51,8 @@ export default function ImageUploader({
   const [editingTextId, setEditingTextId] = useState<number | null>(null);
   //const [previewQR, setPreviewQR] = useState<string>("");
 
-  useEffect(() => {
-    setPreviewQR(""); // 回到页面时强制重置为 Edit
-  }, [setPreviewQR]);
-
-  const {
-    previewUrl,
-    imagePosition,
-    imageScale,
-    contrast,
-    brightness,
-    fitScale,
-    textBoxes,
-  } = imageEditState;
+  const { previewUrl, imagePosition, imageScale, fitScale, textBoxes } =
+    imageEditState;
 
   const updateState = (updates: Partial<ImageEditState>) => {
     setImageEditState({ ...imageEditState, ...updates });
@@ -87,8 +73,6 @@ export default function ImageUploader({
       imagePosition: { x: 0, y: 0 },
       imageScale: 1,
       fitScale: 1,
-      contrast: [0],
-      brightness: [0],
       didInit: false,
     });
 
@@ -117,8 +101,6 @@ export default function ImageUploader({
       imagePosition: { x: 0, y: 0 },
       imageScale: 1,
       fitScale: 1,
-      contrast: [0],
-      brightness: [0],
       textBoxes: [],
       didInit: false,
     });
@@ -494,118 +476,60 @@ export default function ImageUploader({
                     </>
                   )}
                 </div>
-                {previewQR && (
-                  <>
-                    {/* Contrast Slider */}
-                    <div className="space-y-2 mb-4">
-                      <Label className="text-white/80 text-sm">Contrast</Label>
-                      <Slider
-                        value={contrast}
-                        onValueChange={(value) =>
-                          updateState({ contrast: value })
-                        }
-                        min={-100}
-                        max={100}
-                        step={10}
-                        className="w-full"
-                        data-testid="slider-contrast"
-                      />
-                      <div className="text-center text-white/60 text-xs">
-                        {contrast[0] > 0 ? "+" : ""}
-                        {contrast[0]}
-                      </div>
-                    </div>
 
-                    {/* Brightness Slider */}
-                    <div className="space-y-2 mb-4">
-                      <Label className="text-white/80 text-sm">
-                        Brightness
-                      </Label>
-                      <Slider
-                        value={brightness}
-                        onValueChange={(value) =>
-                          updateState({ brightness: value })
-                        }
-                        min={-100}
-                        max={100}
-                        step={10}
-                        className="w-full"
-                        data-testid="slider-brightness"
-                      />
-                      <div className="text-center text-white/60 text-xs">
-                        {brightness[0] > 0 ? "+" : ""}
-                        {brightness[0]}
-                      </div>
-                    </div>
-                    {/* Remove Background Button */}
-                    <Button
-                      variant="outline"
-                      onClick={handleRemoveBackground}
-                      disabled={isProcessing}
-                      className="w-full mb-4 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                      data-testid="button-remove-bg"
-                    >
-                      {isProcessing ? "Processing..." : "Remove Background"}
-                    </Button>
-                  </>
-                )}
-                {!previewQR && (
-                  <>
-                    {/* Zoom Controls */}
-                    <div className="flex items-center justify-center gap-2 mb-4">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="w-8 h-8 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                        onClick={() => {
-                          const minS = fitScale * 0.1;
-                          const newScale = Math.max(minS, imageScale - 0.1);
-                          updateState({ imageScale: newScale });
-                        }}
-                        data-testid="button-zoom-out"
-                      >
-                        <ZoomOut className="w-4 h-4" />
-                      </Button>
-                      <span className="text-white/80 text-sm min-w-12 text-center">
-                        {Math.round((imageScale / fitScale) * 100)}%
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="w-8 h-8 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                        onClick={() => {
-                          const maxS = fitScale * 3;
-                          const newScale = Math.min(maxS, imageScale + 0.1);
-                          updateState({ imageScale: newScale });
-                        }}
-                        data-testid="button-zoom-in"
-                      >
-                        <ZoomIn className="w-4 h-4" />
-                      </Button>
-                    </div>
+                {/* Zoom Controls */}
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="w-8 h-8 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                    onClick={() => {
+                      const minS = fitScale * 0.1;
+                      const newScale = Math.max(minS, imageScale - 0.1);
+                      updateState({ imageScale: newScale });
+                    }}
+                    data-testid="button-zoom-out"
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </Button>
+                  <span className="text-white/80 text-sm min-w-12 text-center">
+                    {Math.round((imageScale / fitScale) * 100)}%
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="w-8 h-8 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                    onClick={() => {
+                      const maxS = fitScale * 3;
+                      const newScale = Math.min(maxS, imageScale + 0.1);
+                      updateState({ imageScale: newScale });
+                    }}
+                    data-testid="button-zoom-in"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </Button>
+                </div>
 
-                    {/* Add Text Button */}
-                    <Button
-                      variant="outline"
-                      onClick={addTextBox}
-                      className="w-full mb-2 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                      data-testid="button-add-text"
-                    >
-                      <Type className="w-4 h-4 mr-2" />
-                      Text
-                    </Button>
+                {/* Add Text Button */}
+                <Button
+                  variant="outline"
+                  onClick={addTextBox}
+                  className="w-full mb-2 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                  data-testid="button-add-text"
+                >
+                  <Type className="w-4 h-4 mr-2" />
+                  Text
+                </Button>
 
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="absolute -top-2 -right-2 w-6 h-6"
-                      onClick={removeImage}
-                      data-testid="button-remove-image"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  className="absolute -top-2 -right-2 w-6 h-6"
+                  onClick={removeImage}
+                  data-testid="button-remove-image"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
               </div>
               {/* <div className="text-center">
                 <p className="text-sm font-medium truncate text-white">
@@ -635,7 +559,7 @@ export default function ImageUploader({
 
           try {
             // ① 从编辑视图导出当前裁剪（含拖拽/缩放/文字；若你有预览滤镜覆盖，这里用“Edit版”的导出函数）
-            const file = await exportForEdit(previewUrl);
+            const file = await exportCroppedPngFromView(previewUrl);
             // 若你还没新建 exportForEdit，也可以用你现有的 exportCroppedPngFromView(previewUrl)
 
             // ② 回写父层，确保下一页也用这张图

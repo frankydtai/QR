@@ -25,8 +25,8 @@ interface ImageEditState {
   previewUrl: string | null;
   imagePosition: { x: number; y: number };
   imageScale: number;
-  contrast: number[];
-  brightness: number[];
+  contrast: number;
+  brightness: number;
   fitScale: number;
   textBoxes: TextBox[];
   didInit: boolean;
@@ -46,8 +46,8 @@ function QRCodeApp() {
     previewUrl: null,
     imagePosition: { x: 0, y: 0 },
     imageScale: 1,
-    contrast: [0],
-    brightness: [0],
+    contrast: 0,
+    brightness: 0,
     fitScale: 1,
     textBoxes: [],
     didInit: false,
@@ -135,6 +135,8 @@ function QRCodeApp() {
             onContinue={goToNextStep} // 进入 URL（Step 4）
             onBack={goToPreviousStep} // 回 Edit（Step 2）
             imageEditState={imageEditState}
+            setImageEditState={setImageEditState} // ← 把這行加回來
+            onImageSelect={handleImageSelect} // ← 加這行
             selectedImage={selectedImage}
             previewQR={previewQR}
             setPreviewQR={setPreviewQR}
