@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import type { RefObject } from "react";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -49,6 +50,7 @@ export async function generateQrCodeUtil(
       outputBgTransparent: false,
       outputCircleShape: false,
       outputImageEncoder: "png",
+      colorHalftone: true,
     };
 
     if (halftoneImage) {
@@ -73,4 +75,122 @@ export async function generateQrCodeUtil(
     console.error("Error generating QR code:", errorMessage);
     throw err;
   }
+}
+
+export async function exportPngWithFiltersFromFile(
+  inputFile: File,
+  contrastVal: number,
+  brightnessVal: number,
+): Promise<File> {
+  const c = contrastVal ?? 0;
+  const b = brightnessVal ?? 0;
+
+  const blobUrl = URL.createObjectURL(inputFile);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || 1;
+      const h = img.naturalHeight || 1;
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("No 2D context"));
+        return;
+      }
+
+      ctx.filter = `contrast(${100 + c}%) brightness(${100 + b}%)`;
+      ctx.drawImage(img, 0, 0, w, h);
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("toBlob failed"));
+          return;
+        }
+        resolve(new File([blob], "filtered.png", { type: "image/png" }));
+        URL.revokeObjectURL(blobUrl);
+      }, "image/png");
+    };
+    img.onerror = () => {
+      reject(new Error("Image load error"));
+      URL.revokeObjectURL(blobUrl);
+    };
+    img.src = blobUrl;
+  });
+}
+
+// utils.ts
+
+export async function exportCroppedPngFromView(
+  previewUrl: string,
+  imagePosition: { x: number; y: number },
+  imageScale: number,
+  fitScale: number,
+  textBoxes: { id: number; x: number; y: number; text: string }[],
+  containerRef?: RefObject<HTMLDivElement> | null, // ★ 允許 null/省略
+): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const box = containerRef?.current?.getBoundingClientRect();
+      const bw = Math.round(box?.width ?? 256);
+      const bh = Math.round(box?.height ?? 256);
+      const dpr = window.devicePixelRatio || 1;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.floor(bw * dpr));
+      canvas.height = Math.max(1, Math.floor(bh * dpr));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("No 2D context"));
+        return;
+      }
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // --- Draw Image ---
+      ctx.save();
+      const tx = (bw / 2 + imagePosition.x) * dpr;
+      const ty = (bh / 2 + imagePosition.y) * dpr;
+      ctx.setTransform(imageScale * dpr, 0, 0, imageScale * dpr, tx, ty);
+      ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+      ctx.restore();
+
+      // --- Draw Text Overlays ---
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      textBoxes.forEach((tb) => {
+        const fontPx = 48;
+        const fontWeight = 600;
+        ctx.font = `${fontWeight} ${fontPx}px system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+        ctx.textBaseline = "top";
+        const metrics = ctx.measureText(tb.text);
+        const textW = Math.ceil(metrics.width);
+        const textH = Math.ceil(fontPx * 1.2);
+        const padX = 8;
+        const padY = 4;
+        const boxW = textW + padX * 2;
+        const boxH = textH + padY * 2;
+
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.fillRect(tb.x, tb.y, boxW, boxH);
+
+        ctx.fillStyle = "#000";
+        ctx.fillText(tb.text, tb.x + padX, tb.y + padY);
+      });
+      ctx.restore();
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("toBlob failed"));
+          return;
+        }
+        resolve(new File([blob], "cropped.png", { type: "image/png" }));
+      }, "image/png");
+    };
+    img.onerror = () => reject(new Error("Image load error"));
+    img.src = previewUrl;
+  });
 }

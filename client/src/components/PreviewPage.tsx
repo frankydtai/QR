@@ -1,10 +1,11 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { generateQrCodeUtil } from "@/lib/utils";
-import { removeBackground } from "@/lib/removeBG";
+import { exportPngWithFiltersFromFile } from "@/lib/utils";
+import { exportCroppedPngFromView } from "@/lib/utils";
 
 interface ImageEditState {
   previewUrl: string | null;
@@ -26,6 +27,10 @@ type Props = {
   onImageSelect: (file: File | null) => void;
   previewQR: string;
   setPreviewQR: (v: string) => void;
+  removedBase?: File | null;
+  editedRemoved?: File | null;
+  isRemoved: boolean;
+  setIsRemoved: (v: boolean) => void;
 };
 
 export default function PreviewPage({
@@ -37,9 +42,14 @@ export default function PreviewPage({
   onImageSelect,
   previewQR,
   setPreviewQR,
+  removedBase,
+  editedRemoved,
+  isRemoved, // ★ 新增：接收父層傳的狀態
+  setIsRemoved,
 }: Props) {
   const [isProcessing, setIsProcessing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inFlightRef = useRef(false); // ← 新增這行
 
   const { previewUrl, imagePosition, imageScale, fitScale } = imageEditState;
   const brightness = imageEditState.brightness ?? 0;
@@ -64,6 +74,7 @@ export default function PreviewPage({
     imageScale: number; // 前一页记录的缩放
     contrast: number | number[]; // 预览页的对比度（可传单值或 [value]）
     brightness: number | number[]; // 预览页的亮度（可传单值或 [value]）
+    removedBase?: File | null; // ★ 新增
   };
 
   /**
@@ -72,171 +83,132 @@ export default function PreviewPage({
    */
   // 直接替换你刚刚改过的函数（保留单一参数签名，不改调用处）
   // 用「前一页已导出的 File」直接套滤镜并导出（不重做前页逻辑）
-  async function exportPngWithFiltersFromFile(
-    inputFile: File,
-    contrastVal: number,
-    brightnessVal: number,
-  ): Promise<File> {
-    const c = contrastVal ?? 0;
-    const b = brightnessVal ?? 0;
-
-    const blobUrl = URL.createObjectURL(inputFile);
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const w = img.naturalWidth || 1;
-        const h = img.naturalHeight || 1;
-
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          reject(new Error("No 2D context"));
-          return;
-        }
-
-        ctx.filter = `contrast(${100 + c}%) brightness(${100 + b}%)`;
-        ctx.drawImage(img, 0, 0, w, h);
-
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            reject(new Error("toBlob failed"));
-            return;
-          }
-          resolve(new File([blob], "filtered.png", { type: "image/png" }));
-          URL.revokeObjectURL(blobUrl);
-        }, "image/png");
-      };
-      img.onerror = () => {
-        reject(new Error("Image load error"));
-        URL.revokeObjectURL(blobUrl);
-      };
-      img.src = blobUrl;
-    });
-  }
 
   const recompute = async () => {
     if (!previewUrl) return;
-    const file = selectedImage
-      ? await exportPngWithFiltersFromFile(selectedImage, contrast, brightness)
-      : null;
+    if (inFlightRef.current) return; // ← 新增：防重入
+    inFlightRef.current = true; // ← 新增
+
+    let file: File | null = null;
+
+    if (isRemoved && removedBase) {
+      // ★ RemoveBackground 狀態 → 先做裁剪/縮放，再套亮度對比
+      const croppedFile = await exportCroppedPngFromView(
+        URL.createObjectURL(removedBase),
+        imagePosition,
+        imageScale,
+        fitScale,
+        imageEditState.textBoxes,
+        containerRef,
+      );
+
+      file = await exportPngWithFiltersFromFile(
+        croppedFile,
+        contrast,
+        brightness,
+      );
+    } else if (selectedImage) {
+      // ★ 原始狀態 → 套亮度對比就好
+      file = await exportPngWithFiltersFromFile(
+        selectedImage,
+        contrast,
+        brightness,
+      );
+    }
+
     if (!file) return;
 
     const base64Image = await generateQrCodeUtil("https://instagram.com", file);
     setPreviewQR(base64Image);
+    inFlightRef.current = false; // ← 新增：釋放
   };
 
-  const handleRemoveBackground = async () => {
-    if (!previewUrl) return;
+  // useEffect(() => {
+  //   recompute();
+  // }, [
+  //   isRemoved, // ← 关键
+  //   removedBase,
+  //   selectedImage,
+  //   contrast,
+  //   brightness,
+  //   imagePosition.x,
+  //   imagePosition.y,
+  //   imageScale,
+  //   fitScale,
+  //   imageEditState.textBoxes.length,
+  // ]);
 
-    // 先同步開一個空白頁，避免被瀏覽器阻擋（保留原本行為）
-    const w = window.open("", "_blank");
-    if (!w) {
-      console.warn("Popup blocked: please allow pop-ups for this site.");
+  const handleRemoveBackground = async () => {
+    const file = editedRemoved ?? removedBase;
+    if (!file || !previewUrl) {
+      alert("沒有可用的去背結果。");
       return;
     }
-    // 先放暫時畫面
-    w.document.write(`
-      <!doctype html><html><head><meta charset="utf-8" />
-      <title>Before / After</title>
-      <style>
-        html,body{height:100%;margin:0;background:#111;color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
-        .wrap{min-height:100%;display:flex;flex-direction:column;gap:16px;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
-        .row{display:flex;gap:24px;flex-wrap:wrap;align-items:center;justify-content:center}
-        .card{background:#1a1a1a;border:1px solid #ffffff22;border-radius:12px;padding:12px}
-        .title{opacity:.85;margin-bottom:8px;text-align:center}
-        img{max-width:42vw;max-height:75vh;object-fit:contain;background:transparent;border-radius:8px;display:block}
-      </style></head>
-      <body>
-        <div class="wrap">
-          <div id="status">Processing…</div>
-        </div>
-      </body></html>
-    `);
-    w.document.close();
 
-    setIsProcessing(true);
     try {
-      // 1) 產生「去背前」的輸入檔（套用目前的對比/亮度）
-      const file = selectedImage
-        ? await exportPngWithFiltersFromFile(
-            selectedImage,
-            contrast,
-            brightness,
-          )
-        : null;
-      if (!file) throw new Error("No input file for removeBackground");
+      const croppedFile = await exportCroppedPngFromView(
+        URL.createObjectURL(file),
+        imagePosition,
+        imageScale,
+        fitScale,
+        imageEditState.textBoxes,
+        containerRef,
+      );
 
-      // 1.1) 把「去背前」讀成 data URL，確保跨視窗可顯示
-      const beforeDataUrl: string = await new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result as string);
-        r.onerror = () => reject(new Error("readAsDataURL failed"));
-        r.readAsDataURL(file);
-      });
+      const filteredFile = await exportPngWithFiltersFromFile(
+        croppedFile,
+        contrast,
+        brightness,
+      );
 
-      // 2) 去背（保持你現有流程）
-      const resultUrl = await removeBackground(file);
-
-      // 將回傳標準化成可 <img src> 的 URL（支援 data/base64 或 http(s)）
-      const afterUrl = /^data:|^blob:|^https?:/.test(resultUrl)
-        ? resultUrl
-        : `data:image/png;base64,${resultUrl}`;
-
-      // 3) 把「去背前/去背後」一起寫進剛剛開的視窗
-      w.document.open();
-      w.document.write(`
-        <!doctype html><html><head><meta charset="utf-8" />
-        <title>Before / After</title>
-        <style>
-          html,body{height:100%;margin:0;background:#111;color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
-          .wrap{min-height:100%;display:flex;flex-direction:column;gap:16px;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
-          .row{display:flex;gap:24px;flex-wrap:wrap;align-items:center;justify-content:center}
-          .card{background:#1a1a1a;border:1px solid #ffffff22;border-radius:12px;padding:12px}
-          .title{opacity:.85;margin-bottom:8px;text-align:center}
-          img{max-width:42vw;max-height:75vh;object-fit:contain;background:transparent;border-radius:8px;display:block}
-        </style></head>
-        <body>
-          <div class="wrap">
-            <div class="row">
-              <div class="card">
-                <div class="title">Before (input to removeBackground)</div>
-                <img src="${beforeDataUrl}" alt="Before" />
-              </div>
-              <div class="card">
-                <div class="title">After (removed background)</div>
-                <img src="${afterUrl}" alt="After" />
-              </div>
-            </div>
-          </div>
-        </body></html>
-      `);
-      w.document.close();
-
-      // 4) 後續維持你原本流程：把去背後結果轉成 File → 產生 QR → 更新父層
-      const blob = await fetch(afterUrl).then((res) => res.blob());
-      const bgRemovedFile = new File([blob], "removed-bg.png", {
-        type: "image/png",
-      });
-
-      const qrImage = await generateQrCodeUtil(
+      const base64Image = await generateQrCodeUtil(
         "https://instagram.com",
-        bgRemovedFile,
+        filteredFile,
       );
-      onImageSelect(bgRemovedFile);
-      setPreviewQR(qrImage);
-    } catch (e) {
-      console.error("Remove Background preview failed:", e);
-      w.document.open();
-      w.document.write(
-        `<pre style="color:#eee;background:#111;padding:16px;white-space:pre-wrap;">${String(e)}</pre>`,
-      );
-      w.document.close();
-    } finally {
-      setIsProcessing(false);
+
+      setPreviewQR(base64Image);
+      setIsRemoved(true); // ★ 設定為已去背
+    } catch (err) {
+      console.error("處理去背圖失敗:", err);
+      alert("處理去背圖時發生錯誤");
     }
+    //setIsRemoved(true); // ← 改成只切狀態
+  };
+
+  const handleRestoreBackground = async () => {
+    if (!selectedImage || !previewUrl) {
+      alert("沒有原始圖片。");
+      return;
+    }
+
+    try {
+      const croppedFile = await exportCroppedPngFromView(
+        previewUrl,
+        imagePosition,
+        imageScale,
+        fitScale,
+        imageEditState.textBoxes,
+        containerRef,
+      );
+
+      const filteredFile = await exportPngWithFiltersFromFile(
+        croppedFile,
+        contrast,
+        brightness,
+      );
+
+      const base64Image = await generateQrCodeUtil(
+        "https://instagram.com",
+        filteredFile,
+      );
+
+      setPreviewQR(base64Image);
+      setIsRemoved(false); // ★ 恢復為未去背
+    } catch (err) {
+      console.error("恢復背景失敗:", err);
+      alert("恢復背景時發生錯誤");
+    }
+    //setIsRemoved(false); // ← 改成只切狀態
   };
 
   return (
@@ -256,7 +228,10 @@ export default function PreviewPage({
             Preview
           </h2>
 
-          <div className="aspect-square w-64 mx-auto overflow-hidden rounded-lg border-2 border-dashed border-white/30 relative bg-white/5">
+          <div
+            ref={containerRef}
+            className="aspect-square w-64 mx-auto overflow-hidden rounded-lg border-2 border-dashed border-white/30 relative bg-white/5"
+          >
             {previewQR ? (
               <img
                 src={previewQR}
@@ -277,7 +252,9 @@ export default function PreviewPage({
               value={[brightness]}
               onValueChange={(value: number[]) => {
                 updateState({ brightness: value[0] ?? 0 });
-                scheduleRecompute();
+              }}
+              onValueCommit={() => {
+                scheduleRecompute();  // ★ 新增：放開滑桿後再重算
               }}
               min={-100}
               max={100}
@@ -298,7 +275,9 @@ export default function PreviewPage({
               value={[contrast]}
               onValueChange={(value: number[]) => {
                 updateState({ contrast: value[0] ?? 0 });
-                scheduleRecompute();
+              }}
+              onValueCommit={() => {
+                scheduleRecompute();  // ★ 新增：放開滑桿後再重算
               }}
               min={-100}
               max={100}
@@ -315,12 +294,14 @@ export default function PreviewPage({
           {/* Remove Background Button */}
           <Button
             variant="outline"
-            onClick={handleRemoveBackground}
+            onClick={
+              isRemoved ? handleRestoreBackground : handleRemoveBackground
+            }
             disabled={isProcessing}
             className="w-full mb-4 bg-white/10 border-white/30 text-white hover:bg-white/20"
             data-testid="button-remove-bg"
           >
-            {isProcessing ? "Processing..." : "Remove Background"}
+            {isRemoved ? "Restore Background" : "Remove Background"}
           </Button>
 
           <div className="pt-2">

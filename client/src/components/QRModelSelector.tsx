@@ -2,42 +2,42 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Check } from 'lucide-react';
-import classicQR from '@assets/generated_images/Classic_QR_code_style_3db73b67.png';
-import roundedQR from '@assets/generated_images/Rounded_QR_code_style_7a686839.png';
-import logoQR from '@assets/generated_images/Logo_center_QR_style_c942c249.png';
-import gradientQR from '@assets/generated_images/Gradient_QR_code_style_8eb6a7ac.png';
+import BW from '@assets/generated_images/Classic_QR_code_style_3db73b67.png';
+import Classic from '@assets/generated_images/Rounded_QR_code_style_7a686839.png';
+import Color from '@assets/generated_images/Logo_center_QR_style_c942c249.png';
+import Go from '@assets/generated_images/Gradient_QR_code_style_8eb6a7ac.png';
 
 export interface QRStyle {
   id: string;
   name: string;
   preview: string;
-  description: string;
+  //description: string;
 }
 
 const qrStyles: QRStyle[] = [
   {
+    id: 'black & white',
+    name: 'Black & White',
+    preview: BW,
+    //description: 'Traditional black and white squares'
+  },
+  {
     id: 'classic',
     name: 'Classic',
-    preview: classicQR,
-    description: 'Traditional black and white squares'
+    preview: Classic,
+    //description: 'Smooth rounded corners'
   },
   {
-    id: 'rounded',
-    name: 'Rounded',
-    preview: roundedQR,
-    description: 'Smooth rounded corners'
+    id: 'Color',
+    name: 'Color',
+    preview: Color,
+    //description: 'Space for logo in center'
   },
   {
-    id: 'logo',
-    name: 'Logo Center',
-    preview: logoQR,
-    description: 'Space for logo in center'
-  },
-  {
-    id: 'gradient',
-    name: 'Gradient',
-    preview: gradientQR,
-    description: 'Colorful gradient design'
+    id: 'go',
+    name: 'Go',
+    preview: Go,
+    //description: 'Colorful gradient design'
   }
 ];
 

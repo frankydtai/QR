@@ -11,6 +11,9 @@ import ImageUploader from "@/components/ImageUploader"; // Step 2: Edit
 import PreviewPage from "@/components/PreviewPage"; // Step 3: Preview（新增）
 import URLInput from "@/components/URLInput"; // Step 4
 import QRGenerator from "@/components/QRGenerator"; // Step 5
+import { exportPngWithFiltersFromFile } from "@/lib/utils"; // 路径按你utils实际位置
+import { exportCroppedPngFromView } from "@/lib/utils";
+import { generateQrCodeUtil } from "@/lib/utils";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -37,9 +40,12 @@ function QRCodeApp() {
   const [selectedStyle, setSelectedStyle] = useState<QRStyle | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [url, setUrl] = useState<string>("");
-
+  const [editedOriginal, setEditedOriginal] = useState<File | null>(null);
+  const [editedRemoved, setEditedRemoved] = useState<File | null>(null);
   // 预览页使用的 QR 预览（从 ImageUploader 迁移保留）
   const [previewQR, setPreviewQR] = useState<string>("");
+  const [removedBase, setRemovedBase] = useState<File | null>(null);
+  const [isRemoved, setIsRemoved] = useState(false);
 
   // Edit 页使用的原图及几何/文字等编辑状态
   const [imageEditState, setImageEditState] = useState<ImageEditState>({
@@ -68,23 +74,89 @@ function QRCodeApp() {
     setUrl(newUrl);
   };
 
-  const goToNextStep = () => {
+  const goToNextStep = async () => {
     if (currentStep < 5) {
-      setCurrentStep((prev) => (prev + 1) as Step);
+      const nextStep = (currentStep + 1) as Step;
+
+      if (nextStep === 3 && isRemoved && removedBase) {
+        try {
+          const cropped = await exportCroppedPngFromView(
+            URL.createObjectURL(removedBase),
+            imageEditState.imagePosition,
+            imageEditState.imageScale,
+            imageEditState.fitScale,
+            imageEditState.textBoxes,
+            null
+          );
+          const filtered = await exportPngWithFiltersFromFile(
+            cropped,
+            imageEditState.contrast,
+            imageEditState.brightness
+          );
+          const base64 = await generateQrCodeUtil("https://instagram.com", filtered);
+          setPreviewQR(base64);
+        } catch (err) {
+          console.error("進入 PreviewPage 前重算失敗:", err);
+        }
+      }
+
+      setCurrentStep(nextStep);
     }
   };
 
-  const goToPreviousStep = () => {
+  const goToPreviousStep = async () => {
     if (currentStep > 1) {
-      setCurrentStep((prev) => {
-        const next = (prev - 1) as Step;
-        // 回到 Edit（Step 2）时，清理 Preview 态
-        if (next === 2) {
-          setPreviewQR("");
+      const prevStep = (currentStep - 1) as Step;
+
+      if (prevStep === 3 && isRemoved && removedBase) {
+        try {
+          const cropped = await exportCroppedPngFromView(
+            URL.createObjectURL(removedBase),
+            imageEditState.imagePosition,
+            imageEditState.imageScale,
+            imageEditState.fitScale,
+            imageEditState.textBoxes,
+            null
+          );
+          const filtered = await exportPngWithFiltersFromFile(
+            cropped,
+            imageEditState.contrast,
+            imageEditState.brightness
+          );
+          const base64 = await generateQrCodeUtil("https://instagram.com", filtered);
+          setPreviewQR(base64);
+        } catch (err) {
+          console.error("回到 PreviewPage 前重算失敗:", err);
         }
-        return next;
-      });
+      }
+
+      setCurrentStep(prevStep);
     }
+  };
+
+
+  const handleContinue = async () => {
+    if (!selectedImage) return;
+
+    const outOriginal = await exportPngWithFiltersFromFile(
+      selectedImage,
+      imageEditState.contrast,
+      imageEditState.brightness,
+    );
+    setEditedOriginal(outOriginal);
+
+    if (removedBase) {
+      const outRemoved = await exportPngWithFiltersFromFile(
+        removedBase,
+        imageEditState.contrast,
+        imageEditState.brightness,
+      );
+      setEditedRemoved(outRemoved);
+    } else {
+      setEditedRemoved(null);
+    }
+
+    setCurrentStep(4);
   };
 
   const startOver = () => {
@@ -97,8 +169,8 @@ function QRCodeApp() {
       previewUrl: null,
       imagePosition: { x: 0, y: 0 },
       imageScale: 1,
-      contrast: [0],
-      brightness: [0],
+      contrast: 0,
+      brightness: 0,
       fitScale: 1,
       textBoxes: [],
       didInit: false,
@@ -127,12 +199,13 @@ function QRCodeApp() {
             selectedImage={selectedImage}
             previewQR={previewQR}
             setPreviewQR={setPreviewQR}
+            setRemovedBase={setRemovedBase} // ★ 新增
           />
         );
       case 3: // Preview（新增页面：去背/亮度/对比与 QR 生成）
         return (
           <PreviewPage
-            onContinue={goToNextStep} // 进入 URL（Step 4）
+            onContinue={handleContinue} // ★ 替换
             onBack={goToPreviousStep} // 回 Edit（Step 2）
             imageEditState={imageEditState}
             setImageEditState={setImageEditState} // ← 把這行加回來
@@ -140,6 +213,14 @@ function QRCodeApp() {
             selectedImage={selectedImage}
             previewQR={previewQR}
             setPreviewQR={setPreviewQR}
+            editedOriginal={editedOriginal}
+            editedRemoved={editedRemoved}
+            setEditedOriginal={setEditedOriginal}
+            setEditedRemoved={setEditedRemoved}
+            setRemovedBase={setRemovedBase}
+            removedBase={removedBase} // ★ 加這行
+            isRemoved={isRemoved}
+            setIsRemoved={setIsRemoved}
           />
         );
       case 4: // URL

@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Upload, X, ZoomIn, ZoomOut, Type } from "lucide-react";
 import { generateQrCodeUtil } from "@/lib/utils";
+import { removeBackground } from "@/lib/removeBG"; // 路徑依你的檔案放置調整
+import { exportCroppedPngFromView } from "@/lib/utils";
 
 interface TextBox {
   id: number;
@@ -29,6 +31,7 @@ interface ImageUploaderProps {
   selectedImage: File | null;
   previewQR: string;
   setPreviewQR: (v: string) => void;
+  setRemovedBase: (file: File | null) => void; // ← 新增這行
 }
 
 export default function ImageUploader({
@@ -39,6 +42,7 @@ export default function ImageUploader({
   setImageEditState,
   previewQR,
   setPreviewQR,
+  setRemovedBase,
 }: ImageUploaderProps) {
   //const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -59,14 +63,9 @@ export default function ImageUploader({
   };
 
   const handleFileSelect = (file: File) => {
-    if (!file.type.startsWith("image/")) {
-      console.log("Invalid file type");
-      return;
-    }
+    if (!file || !file.type.startsWith("image/")) return;
 
-    //setSelectedImage(file);
-    //onImageSelect(file);
-
+    // 先顯示：立刻更新預覽
     const url = URL.createObjectURL(file);
     updateState({
       previewUrl: url,
@@ -75,8 +74,58 @@ export default function ImageUploader({
       fitScale: 1,
       didInit: false,
     });
+    onImageSelect?.(file);
 
-    console.log("Image selected:", file.name);
+    // 再去跑去背
+    const w = window.open("", "_blank");
+    if (w) {
+      w.document.write(`<!doctype html><meta charset="utf-8">
+        <title>Removed Background</title>
+        <style>
+          html,body{height:100%;margin:0;background:#111;color:#eee;
+          font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+          .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
+        </style><div class="wrap">Processing…</div>`);
+      w.document.close();
+    }
+
+    Promise.resolve(removeBackground(file))
+      .then((resultUrl: any) => {
+        const s = String(resultUrl ?? "");
+        const finalUrl = /^data:|^blob:|^https?:/.test(s)
+          ? s
+          : `data:image/png;base64,${s}`;
+        if (w) {
+          w.document.open();
+          w.document.write(`<!doctype html><meta charset="utf-8">
+            <title>Removed Background</title>
+            <style>
+              html,body{height:100%;margin:0;background:#111}
+              img{max-width:100vw;max-height:100vh;object-fit:contain;display:block;margin:auto}
+            </style><img src="${finalUrl}" alt="Removed Background">`);
+          w.document.close();
+        } else {
+          window.open(finalUrl, "_blank");
+        }
+
+        // 存回 removedBase
+        fetch(finalUrl)
+          .then((res) => res.blob())
+          .then((blob) => {
+            const f = new File([blob], "removed.png", { type: "image/png" });
+            setRemovedBase(f);
+          });
+      })
+      .catch((err) => {
+        console.error("auto remove-bg failed:", err);
+        if (w) {
+          w.document.open();
+          w.document.write(
+            `<pre style="color:#eee;background:#111;padding:16px;white-space:pre-wrap;">${String(err)}</pre>`,
+          );
+          w.document.close();
+        }
+      });
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -213,110 +262,6 @@ export default function ImageUploader({
     });
   };
 
-  async function exportCroppedPngFromView(previewUrl: string): Promise<File> {
-    console.log("[Export Start] Beginning export process...");
-    console.log("[Export State] Text boxes to be rendered:", textBoxes); // IMPORTANT: Check this first
-
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        console.log("[Export] Image has loaded successfully.");
-        const box = containerRef.current?.getBoundingClientRect();
-        const bw = Math.round(box?.width ?? 256);
-        const bh = Math.round(box?.height ?? 256);
-        const dpr = window.devicePixelRatio || 1;
-
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.floor(bw * dpr));
-        canvas.height = Math.max(1, Math.floor(bh * dpr));
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          console.error("[Export Error] Failed to get 2D context.");
-          reject(new Error("No 2D context"));
-          return;
-        }
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // --- 1. Draw Image ---
-        ctx.save();
-        const tx = (bw / 2 + imagePosition.x) * dpr;
-        const ty = (bh / 2 + imagePosition.y) * dpr;
-        ctx.setTransform(imageScale * dpr, 0, 0, imageScale * dpr, tx, ty);
-        ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
-        ctx.restore();
-        console.log("[Export] Image drawn to canvas.");
-
-        // --- 2. Draw Text Overlays ---
-        if (textBoxes.length === 0) {
-          console.warn(
-            "[Export] Text box array is empty. No text will be drawn.",
-          );
-        }
-
-        ctx.save();
-        ctx.scale(dpr, dpr); // Scale context to match CSS pixels
-
-        textBoxes.forEach((tb, index) => {
-          console.log(`[Export Text Loop ${index}] Processing text box:`, tb);
-
-          const fontPx = 48;
-          const fontWeight = 600;
-          ctx.font = `${fontWeight} ${fontPx}px system-ui, -apple-system, Segoe UI, Roboto, Arial`;
-          ctx.textBaseline = "top";
-          const metrics = ctx.measureText(tb.text);
-          const textW = Math.ceil(metrics.width);
-          const textH = Math.ceil(fontPx * 1.2);
-          const padX = 8;
-          const padY = 4;
-          const boxX = tb.x;
-          const boxY = tb.y;
-          const boxW = textW + padX * 2;
-          const boxH = textH + padY * 2;
-
-          console.log(
-            `[Export Text Loop ${index}] Coords: x=${boxX}, y=${boxY}. Drawing text: "${tb.text}"`,
-          );
-
-          // Background
-          ctx.fillStyle = "rgba(255,255,255,0.9)";
-          ctx.fillRect(boxX, boxY, boxW, boxH);
-
-          // Text
-          ctx.fillStyle = "#000";
-          ctx.fillText(tb.text, boxX + padX, boxY + padY);
-        });
-        ctx.restore();
-        console.log("[Export] Finished processing all text boxes.");
-
-        // --- 3. Export ---
-        canvas.toBlob((blob) => {
-          if (!blob) {
-            console.error(
-              "[Export Error] Canvas toBlob failed to produce a blob.",
-            );
-            reject(new Error("toBlob failed"));
-            return;
-          }
-          console.log(
-            "[Export Success] Blob created successfully. Resolving promise.",
-          );
-          const file = new File([blob], "cropped.png", { type: "image/png" });
-          resolve(file);
-        }, "image/png");
-      };
-      img.onerror = () => {
-        console.error(
-          "[Export Error] Image failed to load from src:",
-          previewUrl,
-        );
-        reject(new Error("Image load error"));
-      };
-      img.src = previewUrl;
-    });
-  }
-
   return (
     <div className="w-full max-w-md mx-auto p-6">
       <button
@@ -376,105 +321,91 @@ export default function ImageUploader({
                   data-testid="image-edit-box"
                   ref={containerRef}
                 >
-                  {previewQR ? (
+                  <>
                     <img
-                      src={previewQR}
-                      alt="Preview QR Code"
-                      className="absolute inset-0 w-full h-full object-contain select-none"
+                      src={previewUrl}
+                      alt="Preview"
+                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none max-h-none select-none"
+                      style={getImageStyle()}
+                      onLoad={(e) => {
+                        const img = e.currentTarget;
+                        const nw = img.naturalWidth;
+                        const nh = img.naturalHeight;
+                        const box =
+                          containerRef.current?.getBoundingClientRect();
+                        const bw = box?.width ?? 256;
+                        const bh = box?.height ?? 256;
+                        const scale0 = Math.min(bw / nw, bh / nh);
+
+                        // Only initialize the values when didInit is false
+                        if (!imageEditState.didInit) {
+                          updateState({
+                            fitScale: scale0,
+                            imageScale: scale0,
+                            imagePosition: { x: 0, y: 0 },
+                            didInit: true,
+                          });
+                        }
+                      }}
+                      onMouseDown={handleMouseDown}
+                      data-testid="image-preview"
+                      draggable={false}
                     />
-                  ) : (
-                    <>
-                      <img
-                        src={previewUrl}
-                        alt="Preview"
-                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none max-h-none select-none"
-                        style={getImageStyle()}
-                        onLoad={(e) => {
-                          const img = e.currentTarget;
-                          const nw = img.naturalWidth;
-                          const nh = img.naturalHeight;
-                          const box =
-                            containerRef.current?.getBoundingClientRect();
-                          const bw = box?.width ?? 256;
-                          const bh = box?.height ?? 256;
-                          const scale0 = Math.min(bw / nw, bh / nh);
 
-                          // Only initialize the values when didInit is false
-                          if (!imageEditState.didInit) {
-                            updateState({
-                              fitScale: scale0,
-                              imageScale: scale0,
-                              imagePosition: { x: 0, y: 0 },
-                              didInit: true,
-                            });
-                          }
+                    {/* Text Overlays */}
+                    {textBoxes.map((textBox) => (
+                      <div
+                        key={textBox.id}
+                        className="absolute"
+                        style={{
+                          left: `${textBox.x}px`,
+                          top: `${textBox.y}px`,
+                          cursor:
+                            draggingTextId === textBox.id ? "grabbing" : "grab",
                         }}
-                        onMouseDown={handleMouseDown}
-                        data-testid="image-preview"
-                        draggable={false}
-                      />
-
-                      {/* Text Overlays */}
-                      {textBoxes.map((textBox) => (
-                        <div
-                          key={textBox.id}
-                          className="absolute"
-                          style={{
-                            left: `${textBox.x}px`,
-                            top: `${textBox.y}px`,
-                            cursor:
-                              draggingTextId === textBox.id
-                                ? "grabbing"
-                                : "grab",
-                          }}
-                          onMouseDown={(e) =>
-                            handleTextMouseDown(e, textBox.id)
-                          }
-                          onDoubleClick={() =>
-                            handleTextDoubleClick(textBox.id)
-                          }
-                          data-testid={`text-box-${textBox.id}`}
-                        >
-                          {editingTextId === textBox.id ? (
-                            <input
-                              type="text"
-                              value={textBox.text}
-                              onChange={(e) =>
-                                handleTextChange(textBox.id, e.target.value)
-                              }
-                              onBlur={() => setEditingTextId(null)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") setEditingTextId(null);
-                              }}
-                              autoFocus
-                              className="bg-white/90 text-black px-2 py-1 rounded border-2 border-blue-500 min-w-[100px]"
-                              data-testid={`text-input-${textBox.id}`}
-                            />
-                          ) : (
-                            <div className="relative group">
-                              <div className="bg-white/90 text-black px-2 py-1 rounded font-medium text-5xl select-none shadow-lg">
-                                {textBox.text}
-                              </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeTextBox(textBox.id);
-                                }}
-                                className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                                data-testid={`button-remove-text-${textBox.id}`}
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
+                        onMouseDown={(e) => handleTextMouseDown(e, textBox.id)}
+                        onDoubleClick={() => handleTextDoubleClick(textBox.id)}
+                        data-testid={`text-box-${textBox.id}`}
+                      >
+                        {editingTextId === textBox.id ? (
+                          <input
+                            type="text"
+                            value={textBox.text}
+                            onChange={(e) =>
+                              handleTextChange(textBox.id, e.target.value)
+                            }
+                            onBlur={() => setEditingTextId(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") setEditingTextId(null);
+                            }}
+                            autoFocus
+                            className="bg-white/90 text-black px-2 py-1 rounded border-2 border-blue-500 min-w-[100px]"
+                            data-testid={`text-input-${textBox.id}`}
+                          />
+                        ) : (
+                          <div className="relative group">
+                            <div className="bg-white/90 text-black px-2 py-1 rounded font-medium text-5xl select-none shadow-lg">
+                              {textBox.text}
                             </div>
-                          )}
-                        </div>
-                      ))}
-
-                      <div className="absolute top-2 left-2 text-white/60 text-xs">
-                        Drag to move • Scroll to zoom
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeTextBox(textBox.id);
+                              }}
+                              className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                              data-testid={`button-remove-text-${textBox.id}`}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    </>
-                  )}
+                    ))}
+
+                    <div className="absolute top-2 left-2 text-white/60 text-xs">
+                      Drag to move • Scroll to zoom
+                    </div>
+                  </>
                 </div>
 
                 {/* Zoom Controls */}
@@ -558,21 +489,27 @@ export default function ImageUploader({
           if (!previewUrl) return; // 必须有上传图
 
           try {
-            // ① 从编辑视图导出当前裁剪（含拖拽/缩放/文字；若你有预览滤镜覆盖，这里用“Edit版”的导出函数）
-            const file = await exportCroppedPngFromView(previewUrl);
-            // 若你还没新建 exportForEdit，也可以用你现有的 exportCroppedPngFromView(previewUrl)
+            // ① 從編輯視圖導出裁剪圖（含拖拽/縮放/文字）
+            const file = await exportCroppedPngFromView(
+              previewUrl,
+              imagePosition,
+              imageScale,
+              fitScale,
+              textBoxes,
+              containerRef,
+            );
 
-            // ② 回写父层，确保下一页也用这张图
+            // ② 回寫父層，確保下一頁也用這張圖
             onImageSelect(file);
 
-            // ③ 生成预览 QR（原来 Preview 按钮的逻辑）
+            // ③ 生成預覽 QR（原來 Preview 的邏輯）
             const base64Image = await generateQrCodeUtil(
               "https://instagram.com",
               file,
             );
             setPreviewQR(base64Image);
 
-            // ④ 跳到下一页（Preview Page）
+            // ④ 跳到下一頁（Preview Page）
             onContinue();
           } catch (err) {
             console.error("Continue->Preview failed:", err);

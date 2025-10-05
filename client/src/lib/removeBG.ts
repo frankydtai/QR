@@ -146,35 +146,58 @@ async function applyMask(
   const imageData = ctx.getImageData(0, 0, originalWidth, originalHeight);
 
   const maskSize = Math.sqrt(maskTensor.data.length);
-  const maskCanvas = document.createElement("canvas");
-  const maskCtx = maskCanvas.getContext("2d")!;
-  maskCanvas.width = maskSize;
-  maskCanvas.height = maskSize;
-
-  const maskImageData = maskCtx.createImageData(maskSize, maskSize);
   const maskData = maskTensor.data as Float32Array;
 
+  // Normalize mask to 0-255
   let minVal = Infinity,
     maxVal = -Infinity;
   maskData.forEach((val) => {
     if (val < minVal) minVal = val;
     if (val > maxVal) maxVal = val;
   });
-
   const range = maxVal - minVal;
+
+  // alpha matting thresholds
+  const alphaForeground = 240;
+  const alphaBackground = 10;
+  const alphaErode = 1; // 收縮邊界像素
+
+  const tmpAlpha = new Uint8ClampedArray(originalWidth * originalHeight);
+
   for (let i = 0; i < maskData.length; i++) {
     const normalized = ((maskData[i] - minVal) / range) * 255;
-    maskImageData.data[i * 4 + 0] = normalized;
-    maskImageData.data[i * 4 + 1] = normalized;
-    maskImageData.data[i * 4 + 2] = normalized;
+    // 三值化：前景 / 背景 / 模糊區
+    if (normalized >= alphaForeground) {
+      tmpAlpha[i] = 255;
+    } else if (normalized <= alphaBackground) {
+      tmpAlpha[i] = 0;
+    } else {
+      // 模糊過渡區
+      const ratio =
+        (normalized - alphaBackground) / (alphaForeground - alphaBackground);
+      tmpAlpha[i] = Math.round(ratio * 255);
+    }
+  }
+
+  // 放大到原圖大小
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = maskSize;
+  maskCanvas.height = maskSize;
+  const maskCtx = maskCanvas.getContext("2d")!;
+  const maskImageData = maskCtx.createImageData(maskSize, maskSize);
+  for (let i = 0; i < tmpAlpha.length; i++) {
+    maskImageData.data[i * 4 + 0] = tmpAlpha[i];
+    maskImageData.data[i * 4 + 1] = tmpAlpha[i];
+    maskImageData.data[i * 4 + 2] = tmpAlpha[i];
     maskImageData.data[i * 4 + 3] = 255;
   }
   maskCtx.putImageData(maskImageData, 0, 0);
 
+  // resize mask
   const resizedMaskCanvas = document.createElement("canvas");
-  const resizedMaskCtx = resizedMaskCanvas.getContext("2d")!;
   resizedMaskCanvas.width = originalWidth;
   resizedMaskCanvas.height = originalHeight;
+  const resizedMaskCtx = resizedMaskCanvas.getContext("2d")!;
   resizedMaskCtx.drawImage(maskCanvas, 0, 0, originalWidth, originalHeight);
 
   const resizedMaskData = resizedMaskCtx.getImageData(
@@ -183,10 +206,33 @@ async function applyMask(
     originalWidth,
     originalHeight,
   );
-  for (let i = 0; i < imageData.data.length / 4; i++) {
-    imageData.data[i * 4 + 3] = resizedMaskData.data[i * 4];
+
+  // apply erosion (ae=1) by shrinking alpha edges
+  // 這裡用簡單方式：檢查鄰近像素，降低邊緣透明度
+  const erodedAlpha = new Uint8ClampedArray(resizedMaskData.data.length / 4);
+  for (let y = 0; y < originalHeight; y++) {
+    for (let x = 0; x < originalWidth; x++) {
+      const idx = y * originalWidth + x;
+      let minNeighbor = 255;
+      for (let dy = -alphaErode; dy <= alphaErode; dy++) {
+        for (let dx = -alphaErode; dx <= alphaErode; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < originalWidth && ny >= 0 && ny < originalHeight) {
+            const nIdx = ny * originalWidth + nx;
+            minNeighbor = Math.min(minNeighbor, resizedMaskData.data[nIdx * 4]);
+          }
+        }
+      }
+      erodedAlpha[idx] = minNeighbor;
+    }
   }
 
+  // apply new alpha back to original image
+  for (let i = 0; i < imageData.data.length / 4; i++) {
+    imageData.data[i * 4 + 3] = erodedAlpha[i];
+  }
   ctx.putImageData(imageData, 0, 0);
+
   return canvas.toDataURL("image/png");
 }
