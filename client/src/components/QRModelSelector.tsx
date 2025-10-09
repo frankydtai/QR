@@ -16,26 +16,26 @@ export interface QRStyle {
 
 const qrStyles: QRStyle[] = [
   {
-    id: "black & white",
-    name: "Black & White",
+    id: "1",
+    name: "1",
     preview: BW,
     //description: 'Traditional black and white squares'
   },
   {
-    id: "classic",
-    name: "Classic",
+    id: "2",
+    name: "2",
     preview: Classic,
     //description: 'Smooth rounded corners'
   },
   {
-    id: "Color",
-    name: "Color",
+    id: "3",
+    name: "3",
     preview: Color,
     //description: 'Space for logo in center'
   },
   {
-    id: "go",
-    name: "Go",
+    id: "4",
+    name: "4",
     preview: Go,
     //description: 'Colorful gradient design'
   },

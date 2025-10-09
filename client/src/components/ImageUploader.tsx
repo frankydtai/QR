@@ -36,6 +36,8 @@ interface ImageUploaderProps {
   setOriginalImageRB: (file: File | null) => void; // ← 新增這行
   setGrayImageRB: (file: File | null) => void; // ← 新增這行
   isColor: boolean;
+  isNo: boolean;
+  isDiffuse: boolean;
   setSelectedImageRB: (file: File | null) => void;
 }
 
@@ -50,6 +52,8 @@ export default function ImageUploader({
   setOriginalImageRB,
   setGrayImageRB,
   isColor,
+  isNo,
+  isDiffuse,
   setSelectedImageRB,
   selectedImage, // ★ 補這個
 }: ImageUploaderProps) {
@@ -493,20 +497,23 @@ export default function ImageUploader({
 
           try {
             // ① 從編輯視圖導出裁剪圖（含拖拽/縮放/文字）
-            const file = await crop(
+            const croppedImage = await crop(
               imageURL,
               imagePosition,
               imageScale,
               fitScale,
               textBoxes,
-              containerRef,
             );
 
             // ② 回寫父層，確保下一頁也用這張圖
-            onImageSelect(file);
+            //onImageSelect(file);
 
             // ③ 生成預覽 QR（原來 Preview 的邏輯）
-            const base64Image = await generateQr("https://instagram.com", file);
+            const base64Image = await generateQr(
+              "https://instagram.com",
+              croppedImage,
+              { colorHalftone: isColor, noHalftone: isNo, diffuse: isDiffuse },
+            );
             setPreviewQR(base64Image);
 
             // ④ 跳到下一頁（Preview Page）

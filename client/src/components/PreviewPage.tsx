@@ -34,6 +34,8 @@ type Props = {
   grayImageRBFiltered?: File | null;
   isRB: boolean;
   isColor: boolean;
+  isNo: boolean;
+  isDiffuse: boolean;
   setisRB: (v: boolean) => void;
 };
 
@@ -54,13 +56,16 @@ export default function PreviewPage({
   originalImageRBFiltered,
   isRB, // ★ 新增：接收父層傳的狀態
   isColor,
+  isNo,
+  isDiffuse,
   setisRB,
 }: Props) {
   const [isProcessing, setIsProcessing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inFlightRef = useRef(false); // ← 新增這行
 
-  const { imageURL, imagePosition, imageScale, fitScale } = imageEditState;
+  const { imageURL, imagePosition, imageScale, fitScale, textBoxes } =
+    imageEditState;
   const brightness = imageEditState.brightness ?? 0;
   const contrast = imageEditState.contrast ?? 0;
 
@@ -107,8 +112,7 @@ export default function PreviewPage({
         imagePosition,
         imageScale,
         fitScale,
-        imageEditState.textBoxes,
-        containerRef,
+        textBoxes,
       );
 
       file = await filter(croppedImage, contrast, brightness);
@@ -119,8 +123,7 @@ export default function PreviewPage({
         imagePosition,
         imageScale,
         fitScale,
-        imageEditState.textBoxes,
-        containerRef,
+        textBoxes,
       );
 
       file = await filter(croppedImage, contrast, brightness);
@@ -128,7 +131,11 @@ export default function PreviewPage({
 
     if (!file) return;
 
-    const base64Image = await generateQr("https://instagram.com", file);
+    const base64Image = await generateQr("https://instagram.com", file, {
+      colorHalftone: isColor,
+      noHalftone: isNo,
+      diffuse: isDiffuse,
+    });
     setPreviewQR(base64Image);
     inFlightRef.current = false; // ← 新增：釋放
   };
@@ -161,15 +168,15 @@ export default function PreviewPage({
         imagePosition,
         imageScale,
         fitScale,
-        imageEditState.textBoxes,
-        containerRef,
+        textBoxes,
       );
 
-      const filteredFile = await filter(croppedImage, contrast, brightness);
+      const filteredImage = await filter(croppedImage, contrast, brightness);
 
       const base64Image = await generateQr(
         "https://instagram.com",
-        filteredFile,
+        filteredImage,
+        { colorHalftone: isColor, noHalftone: isNo, diffuse: isDiffuse },
       );
 
       setPreviewQR(base64Image);
@@ -193,15 +200,15 @@ export default function PreviewPage({
         imagePosition,
         imageScale,
         fitScale,
-        imageEditState.textBoxes,
-        containerRef,
+        textBoxes,
       );
 
-      const filteredFile = await filter(croppedImage, contrast, brightness);
+      const filteredImage = await filter(croppedImage, contrast, brightness);
 
       const base64Image = await generateQr(
         "https://instagram.com",
-        filteredFile,
+        filteredImage,
+        { colorHalftone: isColor, noHalftone: isNo, diffuse: isDiffuse },
       );
 
       setPreviewQR(base64Image);

@@ -6,9 +6,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+interface QROptions {
+  colorHalftone?: boolean;
+  noHalftone?: boolean;
+  diffuse?: boolean;
+  // 之後還可以再加其他選項
+}
+
 export async function generateQr(
   url: string,
   image?: File | null,
+  opts?: QROptions, // 一個物件，外部傳入
+  //opts?: { colorHalftone?: boolean }, // ← 新增：第三个可选参数
+  //opts?: { noHalftone?: boolean }, // ← 新增：第三个可选参数
 ): Promise<string> {
   if (!url) return "";
 
@@ -50,7 +60,9 @@ export async function generateQr(
       outputBgTransparent: false,
       outputCircleShape: false,
       outputImageEncoder: "png",
-      colorHalftone: isColor,
+      colorHalftone: !!opts?.colorHalftone, // ← 改这里：由外部决定（isColor）
+      noHalftone: !!opts?.noHalftone, // ← 改这里：由外部决定（isNo）
+      diffuse: !!opts?.diffuse, // ← 改这里：由外部决定（isDiffuse）
     };
 
     if (halftoneImage) {
@@ -128,15 +140,17 @@ export async function crop(
   imageScale: number,
   fitScale: number,
   textBoxes: { id: number; x: number; y: number; text: string }[],
-  containerRef?: RefObject<HTMLDivElement> | null, // ★ 允許 null/省略
+  //containerRef?: RefObject<HTMLDivElement> | null, // ★ 允許 null/省略
 ): Promise<File> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
-      const box = containerRef?.current?.getBoundingClientRect();
-      const bw = Math.round(box?.width ?? 256);
-      const bh = Math.round(box?.height ?? 256);
+      // const box = containerRef?.current?.getBoundingClientRect();
+      // const bw = Math.round(box?.width ?? 256);
+      // const bh = Math.round(box?.height ?? 256);
+      const bw = 256;
+      const bh = 256;
       const dpr = window.devicePixelRatio || 1;
 
       const canvas = document.createElement("canvas");

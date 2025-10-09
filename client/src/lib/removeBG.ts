@@ -129,7 +129,7 @@ async function preprocessImage(
     targetSize,
     targetSize,
   ]);
-  return [inputTensor, img.width, img.height];
+  return [inputTensor, img.naturalWidth, img.naturalHeight];
 }
 
 async function applyMask(
@@ -233,6 +233,15 @@ async function applyMask(
     imageData.data[i * 4 + 3] = erodedAlpha[i];
   }
   ctx.putImageData(imageData, 0, 0);
+    ctx.putImageData(imageData, 0, 0);
+    // ★ 保险：再复制到严格尺寸的画布（理论上 same size，不会二次插值）
+    if (canvas.width !== originalWidth || canvas.height !== originalHeight) {
+      const finalCanvas = document.createElement("canvas");
+      finalCanvas.width = originalWidth;
+      finalCanvas.height = originalHeight;
+      finalCanvas.getContext("2d")!.drawImage(canvas, 0, 0, originalWidth, originalHeight);
+      return finalCanvas.toDataURL("image/png");
+    }
 
   return canvas.toDataURL("image/png");
 }

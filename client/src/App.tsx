@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -37,6 +37,7 @@ interface ImageEditState {
 }
 
 function QRCodeApp() {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [selectedStyle, setSelectedStyle] = useState<QRStyle | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -59,6 +60,8 @@ function QRCodeApp() {
 
   const [precomputeRB, setPrecomputeRB] = useState(false);
   const [isColor, setIsColor] = useState<boolean>(false);
+  const [isNo, setIsNo] = useState<boolean>(false);
+  const [isDiffuse, setIsDiffuse] = useState<boolean>(false);
   // Edit 页使用的原图及几何/文字等编辑状态
   const [imageEditState, setImageEditState] = useState<ImageEditState>({
     imageURL: null,
@@ -76,31 +79,39 @@ function QRCodeApp() {
 
   const handleStyleSelect = (style: QRStyle) => {
     setSelectedStyle(style);
-    setIsColor(style.id === "Color");
+    setIsColor(["2", "4"].includes(style.id));
+    setIsNo(["4"].includes(style.id));
+    setIsDiffuse(["3"].includes(style.id));
   };
 
   const handleImageSelect = async (file: File | null) => {
     if (!file) {
       setSelectedImage(null);
+      setOriginalImage(null);
+      setGrayImage(null);
+      setOriginalImageRB(null);
+      setGrayImageRB(null);
       setSelectedImageRB(null);
       setImageEditState((prev) => ({ ...prev, imageURL: null }));
       return;
     }
 
     // 第一次上传时，保存一份原始彩色图，不会被覆盖
-    setOriginalImage((prev) => prev ?? file);
+    //setOriginalImage((prev) => prev ?? file);
 
     // 以 originalImage 为基准派生
-    const base = originalImage ?? file;
-    const gray = await convertGray(base);
+    //const base = originalImage ?? file;
+    //const base = file;
+    setOriginalImage(file);
+    const gray = await convertGray(file);
     setGrayImage(gray);
 
     if (isColor) {
       // 彩色模式 → 直接用原始图
-      setSelectedImage(base);
+      setSelectedImage(file);
       setImageEditState((prev) => ({
         ...prev,
-        imageURL: URL.createObjectURL(base),
+        imageURL: URL.createObjectURL(file),
       }));
     } else {
       // 非彩色模式 → 生成灰阶图
@@ -109,6 +120,7 @@ function QRCodeApp() {
       setImageEditState((prev) => ({
         ...prev,
         imageURL: URL.createObjectURL(gray),
+        didInit: false, // 讓編輯盒重新算 fitScale
       }));
     }
   };
@@ -171,7 +183,6 @@ function QRCodeApp() {
           imageEditState.imageScale,
           imageEditState.fitScale,
           imageEditState.textBoxes,
-          null,
         );
 
         const filtered = await filter(
@@ -183,6 +194,7 @@ function QRCodeApp() {
         const qrBase64 = await generateQr(
           url || "https://instagram.com",
           filtered,
+          { colorHalftone: isColor, noHalftone: isNo, diffuse: isDiffuse },
         );
         setPreviewQR(qrBase64);
 
@@ -288,6 +300,8 @@ function QRCodeApp() {
             setGrayImageRB={setGrayImageRB} // ★ 新增
             isColor={isColor}
             setSelectedImageRB={setSelectedImageRB}
+            isNo={isNo}
+            isDiffuse={isDiffuse}
           />
         );
       case 3: // Preview（新增页面：去背/亮度/对比与 QR 生成）
@@ -311,6 +325,8 @@ function QRCodeApp() {
             isRB={isRB}
             setisRB={setisRB}
             isColor={isColor}
+            isNo={isNo}
+            isDiffuse={isDiffuse}
           />
         );
       case 4: // URL
