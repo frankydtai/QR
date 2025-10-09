@@ -2,9 +2,11 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Upload, X, ZoomIn, ZoomOut, Type } from "lucide-react";
-import { generateQrCodeUtil } from "@/lib/utils";
+import { generateQr } from "@/lib/utils";
 import { removeBackground } from "@/lib/removeBG"; // 路徑依你的檔案放置調整
-import { exportCroppedPngFromView } from "@/lib/utils";
+import { crop } from "@/lib/utils";
+import { convertGray } from "@/lib/utils";
+import QRModelSelector, { type QRStyle } from "@/components/QRModelSelector";
 
 interface TextBox {
   id: number;
@@ -14,7 +16,7 @@ interface TextBox {
 }
 
 interface ImageEditState {
-  previewUrl: string | null;
+  imageURL: string | null;
   imagePosition: { x: number; y: number };
   imageScale: number;
   fitScale: number;
@@ -31,7 +33,10 @@ interface ImageUploaderProps {
   selectedImage: File | null;
   previewQR: string;
   setPreviewQR: (v: string) => void;
-  setRemovedBase: (file: File | null) => void; // ← 新增這行
+  setOriginalImageRB: (file: File | null) => void; // ← 新增這行
+  setGrayImageRB: (file: File | null) => void; // ← 新增這行
+  isColor: boolean;
+  setSelectedImageRB: (file: File | null) => void;
 }
 
 export default function ImageUploader({
@@ -42,7 +47,11 @@ export default function ImageUploader({
   setImageEditState,
   previewQR,
   setPreviewQR,
-  setRemovedBase,
+  setOriginalImageRB,
+  setGrayImageRB,
+  isColor,
+  setSelectedImageRB,
+  selectedImage, // ★ 補這個
 }: ImageUploaderProps) {
   //const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -55,28 +64,23 @@ export default function ImageUploader({
   const [editingTextId, setEditingTextId] = useState<number | null>(null);
   //const [previewQR, setPreviewQR] = useState<string>("");
 
-  const { previewUrl, imagePosition, imageScale, fitScale, textBoxes } =
+  const { imageURL, imagePosition, imageScale, fitScale, textBoxes } =
     imageEditState;
 
   const updateState = (updates: Partial<ImageEditState>) => {
     setImageEditState({ ...imageEditState, ...updates });
   };
 
-  const handleFileSelect = (file: File) => {
+  // ⬇︎ 替換原本的 handleFileSelect
+  const handleFileSelect = async (file: File) => {
     if (!file || !file.type.startsWith("image/")) return;
 
-    // 先顯示：立刻更新預覽
-    const url = URL.createObjectURL(file);
-    updateState({
-      previewUrl: url,
-      imagePosition: { x: 0, y: 0 },
-      imageScale: 1,
-      fitScale: 1,
-      didInit: false,
-    });
-    onImageSelect?.(file);
+    // 1) 交給 App：它會依 Model 決定彩色/灰階並回傳最終檔案
+    //    確保 onImageSelect 回傳 Promise<File>（App 的 handleImageSelect 要 return finalFile）
+    const final = await onImageSelect?.(file);
+    const target = final instanceof File ? final : file;
 
-    // 再去跑去背
+    // 2) 只在這個事件中跑一次去背（返回上一頁不會重跑）
     const w = window.open("", "_blank");
     if (w) {
       w.document.write(`<!doctype html><meta charset="utf-8">
@@ -89,43 +93,42 @@ export default function ImageUploader({
       w.document.close();
     }
 
-    Promise.resolve(removeBackground(file))
-      .then((resultUrl: any) => {
-        const s = String(resultUrl ?? "");
-        const finalUrl = /^data:|^blob:|^https?:/.test(s)
-          ? s
-          : `data:image/png;base64,${s}`;
-        if (w) {
-          w.document.open();
-          w.document.write(`<!doctype html><meta charset="utf-8">
-            <title>Removed Background</title>
-            <style>
-              html,body{height:100%;margin:0;background:#111}
-              img{max-width:100vw;max-height:100vh;object-fit:contain;display:block;margin:auto}
-            </style><img src="${finalUrl}" alt="Removed Background">`);
-          w.document.close();
-        } else {
-          window.open(finalUrl, "_blank");
-        }
+    try {
+      const resultUrl: any = await Promise.resolve(removeBackground(target));
+      const s = String(resultUrl ?? "");
+      const finalUrl = /^data:|^blob:|^https?:/.test(s)
+        ? s
+        : `data:image/png;base64,${s}`;
 
-        // 存回 removedBase
-        fetch(finalUrl)
-          .then((res) => res.blob())
-          .then((blob) => {
-            const f = new File([blob], "removed.png", { type: "image/png" });
-            setRemovedBase(f);
-          });
-      })
-      .catch((err) => {
-        console.error("auto remove-bg failed:", err);
-        if (w) {
-          w.document.open();
-          w.document.write(
-            `<pre style="color:#eee;background:#111;padding:16px;white-space:pre-wrap;">${String(err)}</pre>`,
-          );
-          w.document.close();
-        }
-      });
+      if (w) {
+        w.document.open();
+        w.document.write(`<!doctype html><meta charset="utf-8">
+          <title>Removed Background</title>
+          <style>
+            html,body{height:100%;margin:0;background:#111}
+            img{max-width:100vw;max-height:100vh;object-fit:contain;display:block;margin:auto}
+          </style><img src="${finalUrl}" alt="Removed Background">`);
+        w.document.close();
+      } else {
+        window.open(finalUrl, "_blank");
+      }
+
+      const blob = await fetch(finalUrl).then((r) => r.blob());
+      const f = new File([blob], "removed.png", { type: "image/png" });
+      setOriginalImageRB(f);
+      const grayRB = await convertGray(f); // ← 把去背图再转成灰阶
+      setGrayImageRB(grayRB);
+      setSelectedImageRB(isColor ? f : grayRB);
+    } catch (err) {
+      console.error("auto remove-bg failed:", err);
+      if (w) {
+        w.document.open();
+        w.document.write(
+          `<pre style="color:#eee;background:#111;padding:16px;white-space:pre-wrap;">${String(err)}</pre>`,
+        );
+        w.document.close();
+      }
+    }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -146,7 +149,7 @@ export default function ImageUploader({
   const removeImage = () => {
     //setSelectedImage(null);
     updateState({
-      previewUrl: null,
+      imageURL: null,
       imagePosition: { x: 0, y: 0 },
       imageScale: 1,
       fitScale: 1,
@@ -282,7 +285,7 @@ export default function ImageUploader({
       </div>
 
       <div className="mb-8">
-        {!previewUrl ? (
+        {!imageURL ? (
           <Card
             className="border-2 border-dashed border-white/30 p-8 text-center hover-elevate cursor-pointer transition-colors bg-white/10 backdrop-blur-sm"
             onDrop={handleDrop}
@@ -323,7 +326,7 @@ export default function ImageUploader({
                 >
                   <>
                     <img
-                      src={previewUrl}
+                      src={imageURL}
                       alt="Preview"
                       className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none max-h-none select-none"
                       style={getImageStyle()}
@@ -486,12 +489,12 @@ export default function ImageUploader({
 
       <Button
         onClick={async () => {
-          if (!previewUrl) return; // 必须有上传图
+          if (!imageURL) return; // 必须有上传图
 
           try {
             // ① 從編輯視圖導出裁剪圖（含拖拽/縮放/文字）
-            const file = await exportCroppedPngFromView(
-              previewUrl,
+            const file = await crop(
+              imageURL,
               imagePosition,
               imageScale,
               fitScale,
@@ -503,10 +506,7 @@ export default function ImageUploader({
             onImageSelect(file);
 
             // ③ 生成預覽 QR（原來 Preview 的邏輯）
-            const base64Image = await generateQrCodeUtil(
-              "https://instagram.com",
-              file,
-            );
+            const base64Image = await generateQr("https://instagram.com", file);
             setPreviewQR(base64Image);
 
             // ④ 跳到下一頁（Preview Page）

@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export async function generateQrCodeUtil(
+export async function generateQr(
   url: string,
   image?: File | null,
 ): Promise<string> {
@@ -50,7 +50,7 @@ export async function generateQrCodeUtil(
       outputBgTransparent: false,
       outputCircleShape: false,
       outputImageEncoder: "png",
-      colorHalftone: true,
+      colorHalftone: isColor,
     };
 
     if (halftoneImage) {
@@ -77,7 +77,7 @@ export async function generateQrCodeUtil(
   }
 }
 
-export async function exportPngWithFiltersFromFile(
+export async function filter(
   inputFile: File,
   contrastVal: number,
   brightnessVal: number,
@@ -122,8 +122,8 @@ export async function exportPngWithFiltersFromFile(
 
 // utils.ts
 
-export async function exportCroppedPngFromView(
-  previewUrl: string,
+export async function crop(
+  imageURL: string,
   imagePosition: { x: number; y: number },
   imageScale: number,
   fitScale: number,
@@ -191,6 +191,54 @@ export async function exportCroppedPngFromView(
       }, "image/png");
     };
     img.onerror = () => reject(new Error("Image load error"));
-    img.src = previewUrl;
+    img.src = imageURL;
+  });
+}
+
+export async function convertGray(inputFile: File): Promise<File> {
+  const blobUrl = URL.createObjectURL(inputFile);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth || 1;
+      const h = img.naturalHeight || 1;
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("No 2D context"));
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, w, h);
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const data = imageData.data;
+
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        // 灰階公式（加權平均）
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        data[i] = data[i + 1] = data[i + 2] = gray;
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error("toBlob failed"));
+          return;
+        }
+        resolve(new File([blob], "grayscale.png", { type: "image/png" }));
+        URL.revokeObjectURL(blobUrl);
+      }, "image/png");
+    };
+    img.onerror = () => {
+      reject(new Error("Image load error"));
+      URL.revokeObjectURL(blobUrl);
+    };
+    img.src = blobUrl;
   });
 }

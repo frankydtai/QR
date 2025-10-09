@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Share2, Download, RotateCcw } from "lucide-react";
 import type { QRStyle } from "./QRModelSelector";
-import { generateQrCodeUtil } from "@/lib/utils";
+import { generateQr } from "@/lib/utils";
 
 interface QRGeneratorProps {
   url: string;
@@ -38,7 +38,7 @@ export default function QRGenerator({
       try {
         setIsGenerating(true);
         setError("");
-        const base64Image = await generateQrCodeUtil(url, image);
+        const base64Image = await generateQr(url, image);
         setQrCodeUrl(base64Image);
       } catch (err) {
         const errorMessage =
