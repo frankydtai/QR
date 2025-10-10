@@ -6,6 +6,7 @@ import { Slider } from "@/components/ui/slider";
 import { generateQr } from "@/lib/utils";
 import { filter } from "@/lib/utils";
 import { crop } from "@/lib/utils";
+import { preloadWasm } from "@/lib/utils"; // ← 新增這行
 
 interface ImageEditState {
   imageURL: string | null;
@@ -60,9 +61,31 @@ export default function PreviewPage({
   isDiffuse,
   setisRB,
 }: Props) {
+  if (isRB && !selectedImageRB) {
+    return (
+      <div className="w-full max-w-md mx-auto p-6 flex flex-col items-center justify-center text-center text-white/80 bg-white/10 backdrop-blur-sm rounded-lg border border-white/20">
+        <h2 className="text-xl font-semibold mb-4">Processing Image</h2>
+        <p>
+          The background-removed image is being prepared. Please wait a
+          moment...
+        </p>
+        {/* 你也可以在這裡放一個 Spinner 元件 */}
+      </div>
+    );
+  }
+
   const [isProcessing, setIsProcessing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inFlightRef = useRef(false); // ← 新增這行
+
+  useEffect(() => {
+    console.log("[PREVIEW PAGE] useEffect triggered for preloading WASM."); // <-- 新增日誌
+    preloadWasm({
+      name: "goqr",
+      path: "/goqr.wasm",
+      globalFunction: "generateQRCode",
+    });
+  }, []);
 
   const { imageURL, imagePosition, imageScale, fitScale, textBoxes } =
     imageEditState;

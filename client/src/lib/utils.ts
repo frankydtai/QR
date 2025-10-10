@@ -32,13 +32,13 @@ let wasmExecLoading: Promise<void> | null = null;
 async function waitForExport(
   functionName: string,
   timeout = 1000,
-  pollInterval = 20
+  pollInterval = 20,
 ): Promise<void> {
   const start = Date.now();
   while (!(window as any)[functionName]) {
     if (Date.now() - start > timeout) {
       throw new Error(
-        `Timeout: ${functionName} not available after ${timeout}ms`
+        `Timeout: ${functionName} not available after ${timeout}ms`,
       );
     }
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -47,7 +47,7 @@ async function waitForExport(
 
 // Load wasm_exec.js once (single-flight, idempotent)
 async function ensureWasmExec(
-  execJsPath: string = "/wasm_exec.js"
+  execJsPath: string = "/wasm_exec.js",
 ): Promise<void> {
   if (wasmExecLoaded) return;
 
@@ -77,87 +77,114 @@ async function ensureWasmExec(
 // Load WASM with all safeguards
 export async function loadWasm(
   config: WasmConfig,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal },
 ): Promise<void> {
-  const state = wasmStates.get(config.name) || {
+  // 取出或建立狀態
+  const state: WasmModuleState = wasmStates.get(config.name) || {
     loading: null,
     loaded: false,
     error: null,
   };
 
-  // Already loaded successfully
-  if (state.loaded && (window as any)[config.globalFunction]) {
-    return;
+  // ✅ 以「全域函式是否存在」為主：若已存在，直接視為已載入，並同步校正快取狀態
+  const hasFn = !!(window as any)[config.globalFunction];
+  if (hasFn) {
+    if (!state.loaded) {
+      state.loaded = true;
+      state.error = null;
+      wasmStates.set(config.name, state);
+    }
+    return; // 已可用，無需再載入
   }
 
-  // Currently loading - wait for it (concurrent load protection)
+  // 已載入但（理論上不會發生因 hasFn=false）—保險：若 state.loaded 為 true，但 fn 不在，仍需重載
+  if (state.loaded && !hasFn) {
+    // fall through 進入重載流程
+  }
+
+  // 併發去重：若已有載入中，等待同一個 promise
   if (state.loading) {
     return state.loading;
   }
 
-  // Start new load
+  // 建立新的載入流程
   const loadingPromise = (async () => {
     try {
-      // Ensure wasm_exec.js is loaded
+      // 確保 wasm_exec.js 單例載入
       await ensureWasmExec(config.execJsPath);
 
       if (!window.Go) {
         throw new Error("Go runtime not available after loading wasm_exec.js");
       }
 
-      // Create new Go instance for this WASM (isolated runtime)
+      // 為此模組建立獨立 Go 執行個體
       const go = new window.Go();
 
-      // Try instantiateStreaming first (faster), fallback to fetch
+      // 先嘗試 streaming，失敗再退回 arrayBuffer
       let wasmModule: WebAssembly.WebAssemblyInstantiatedSource;
-
       try {
         wasmModule = await WebAssembly.instantiateStreaming(
           fetch(config.path, { signal: options?.signal }),
-          go.importObject
+          go.importObject,
         );
       } catch (streamError) {
         console.warn(
           `instantiateStreaming failed for ${config.name}, using fallback:`,
-          streamError
+          streamError,
         );
-
         const response = await fetch(config.path, { signal: options?.signal });
         const bytes = await response.arrayBuffer();
         wasmModule = await WebAssembly.instantiate(bytes, go.importObject);
       }
 
+      // 跑 Go 程式（非同步、不 await）
       // Run the Go program (non-blocking)
+      console.log(
+        "[DEBUG] calling go.run for",
+        config.name,
+        "at",
+        new Date().toISOString(),
+      );
       go.run(wasmModule.instance);
+      console.log("[DEBUG] finished go.run for", config.name);
 
-      // Wait for export with polling (safe for slow devices)
-      await waitForExport(config.globalFunction, 1000, 20);
+      // 等待 Go 端把全域函式掛好
+      await waitForExport(config.globalFunction, 10000, 20); // 建議 3s，較保守
 
+      // ✅ 載入成功，回寫狀態（非常重要）
       state.loaded = true;
       state.error = null;
+      wasmStates.set(config.name, state);
     } catch (error) {
-      // Handle abort separately
+      // 中止單獨記錄
       if (error instanceof Error && error.name === "AbortError") {
         console.log(`WASM load aborted: ${config.name}`);
       }
       state.error = error instanceof Error ? error : new Error(String(error));
-      state.loaded = false;
+      state.loaded = false; // 失敗狀態
+      wasmStates.set(config.name, state);
       throw state.error;
     } finally {
+      // 無論成功或失敗，都清除 loading，並回寫狀態
       state.loading = null;
+      wasmStates.set(config.name, state);
     }
   })();
 
+  // 將 in-flight promise 存起來以防併發
   state.loading = loadingPromise;
   wasmStates.set(config.name, state);
 
+  // 交還同一個 promise（供併發者 await）
   return loadingPromise;
 }
+
+
 
 // Retry failed load
 export async function retryWasmLoad(
   wasmName: string,
-  config: WasmConfig
+  config: WasmConfig,
 ): Promise<void> {
   const state = wasmStates.get(wasmName);
   if (state) {
@@ -217,11 +244,23 @@ export async function generateQr(
           const result = e.target?.result;
           if (typeof result === "string") {
             resolve(result.split(",")[1]);
+            console.log(
+              "[DEBUG] FileReader finished at",
+              new Date().toISOString(),
+              "for image",
+              image.name,
+            );
           } else {
             reject(new Error("Failed to read image"));
           }
         };
         reader.onerror = () => reject(new Error("Failed to read image"));
+        console.log(
+          "[DEBUG] FileReader start at",
+          new Date().toISOString(),
+          "for image",
+          image.name,
+        );
         reader.readAsDataURL(image);
       });
     }
