@@ -6,209 +6,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// ============================================================================
-// WASM Dynamic Loader
-// ============================================================================
-
-interface WasmConfig {
-  name: string;
-  path: string;
-  globalFunction: string;
-  execJsPath?: string;
-}
-
-interface WasmModuleState {
-  loading: Promise<void> | null;
-  loaded: boolean;
-  error: Error | null;
-}
-
-// Track all WASM modules
-const wasmStates = new Map<string, WasmModuleState>();
-let wasmExecLoaded = false;
-let wasmExecLoading: Promise<void> | null = null;
-
-// Robust export readiness check with polling
-async function waitForExport(
-  functionName: string,
-  timeout = 1000,
-  pollInterval = 20,
-): Promise<void> {
-  const start = Date.now();
-  while (!(window as any)[functionName]) {
-    if (Date.now() - start > timeout) {
-      throw new Error(
-        `Timeout: ${functionName} not available after ${timeout}ms`,
-      );
-    }
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
-  }
-}
-
-// Load wasm_exec.js once (single-flight, idempotent)
-async function ensureWasmExec(
-  execJsPath: string = "/wasm_exec.js",
-): Promise<void> {
-  if (wasmExecLoaded) return;
-
-  if (wasmExecLoading) {
-    return wasmExecLoading;
-  }
-
-  wasmExecLoading = new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = execJsPath;
-    script.onload = () => {
-      wasmExecLoaded = true;
-      wasmExecLoading = null;
-      resolve();
-    };
-    script.onerror = () => {
-      wasmExecLoading = null;
-      reject(new Error(`Failed to load ${execJsPath}`));
-    };
-    // TODO: For future CSP compliance, may need nonce attribute
-    document.head.appendChild(script);
-  });
-
-  return wasmExecLoading;
-}
-
-// Load WASM with all safeguards
-export async function loadWasm(
-  config: WasmConfig,
-  options?: { signal?: AbortSignal },
-): Promise<void> {
-  // 取出或建立狀態
-  const state: WasmModuleState = wasmStates.get(config.name) || {
-    loading: null,
-    loaded: false,
-    error: null,
-  };
-
-  // ✅ 以「全域函式是否存在」為主：若已存在，直接視為已載入，並同步校正快取狀態
-  const hasFn = !!(window as any)[config.globalFunction];
-  if (hasFn) {
-    if (!state.loaded) {
-      state.loaded = true;
-      state.error = null;
-      wasmStates.set(config.name, state);
-    }
-    return; // 已可用，無需再載入
-  }
-
-  // 已載入但（理論上不會發生因 hasFn=false）—保險：若 state.loaded 為 true，但 fn 不在，仍需重載
-  if (state.loaded && !hasFn) {
-    // fall through 進入重載流程
-  }
-
-  // 併發去重：若已有載入中，等待同一個 promise
-  if (state.loading) {
-    return state.loading;
-  }
-
-  // 建立新的載入流程
-  const loadingPromise = (async () => {
-    try {
-      // 確保 wasm_exec.js 單例載入
-      await ensureWasmExec(config.execJsPath);
-
-      if (!window.Go) {
-        throw new Error("Go runtime not available after loading wasm_exec.js");
-      }
-
-      // 為此模組建立獨立 Go 執行個體
-      const go = new window.Go();
-
-      // 先嘗試 streaming，失敗再退回 arrayBuffer
-      let wasmModule: WebAssembly.WebAssemblyInstantiatedSource;
-      try {
-        wasmModule = await WebAssembly.instantiateStreaming(
-          fetch(config.path, { signal: options?.signal }),
-          go.importObject,
-        );
-      } catch (streamError) {
-        console.warn(
-          `instantiateStreaming failed for ${config.name}, using fallback:`,
-          streamError,
-        );
-        const response = await fetch(config.path, { signal: options?.signal });
-        const bytes = await response.arrayBuffer();
-        wasmModule = await WebAssembly.instantiate(bytes, go.importObject);
-      }
-
-      // 跑 Go 程式（非同步、不 await）
-      // Run the Go program (non-blocking)
-      console.log(
-        "[DEBUG] calling go.run for",
-        config.name,
-        "at",
-        new Date().toISOString(),
-      );
-      go.run(wasmModule.instance);
-      console.log("[DEBUG] finished go.run for", config.name);
-
-      // 等待 Go 端把全域函式掛好
-      await waitForExport(config.globalFunction, 10000, 20); // 建議 3s，較保守
-
-      // ✅ 載入成功，回寫狀態（非常重要）
-      state.loaded = true;
-      state.error = null;
-      wasmStates.set(config.name, state);
-    } catch (error) {
-      // 中止單獨記錄
-      if (error instanceof Error && error.name === "AbortError") {
-        console.log(`WASM load aborted: ${config.name}`);
-      }
-      state.error = error instanceof Error ? error : new Error(String(error));
-      state.loaded = false; // 失敗狀態
-      wasmStates.set(config.name, state);
-      throw state.error;
-    } finally {
-      // 無論成功或失敗，都清除 loading，並回寫狀態
-      state.loading = null;
-      wasmStates.set(config.name, state);
-    }
-  })();
-
-  // 將 in-flight promise 存起來以防併發
-  state.loading = loadingPromise;
-  wasmStates.set(config.name, state);
-
-  // 交還同一個 promise（供併發者 await）
-  return loadingPromise;
-}
-
-
-
-// Retry failed load
-export async function retryWasmLoad(
-  wasmName: string,
-  config: WasmConfig,
-): Promise<void> {
-  const state = wasmStates.get(wasmName);
-  if (state) {
-    state.loaded = false;
-    state.error = null;
-    state.loading = null;
-  }
-  return loadWasm(config);
-}
-
-// Idempotent preload helper (for mobile optimization)
-export function preloadWasm(config: WasmConfig): void {
-  const state = wasmStates.get(config.name);
-  if (state?.loaded || state?.loading) return; // No-op if already done/in-progress
-
-  loadWasm(config).catch((err) => {
-    console.error(`Failed to preload ${config.name}:`, err);
-  });
-}
-
-// ============================================================================
-// QR Generation
-// ============================================================================
-
 interface QROptions {
   colorHalftone?: boolean;
   noHalftone?: boolean;
@@ -219,20 +16,17 @@ interface QROptions {
 export async function generateQr(
   url: string,
   image?: File | null,
-  opts?: QROptions,
+  opts?: QROptions, // 一個物件，外部傳入
+  //opts?: { colorHalftone?: boolean }, // ← 新增：第三个可选参数
+  //opts?: { noHalftone?: boolean }, // ← 新增：第三个可选参数
 ): Promise<string> {
   if (!url) return "";
 
   try {
-    // Dynamically load goqr.wasm on demand
-    await loadWasm({
-      name: "goqr",
-      path: "/goqr.wasm",
-      globalFunction: "generateQRCode",
-    });
-
     if (!window.generateQRCode) {
-      throw new Error("QR code generator failed to load");
+      throw new Error(
+        "WASM QR code generator not loaded yet. Please refresh the page.",
+      );
     }
 
     let halftoneImage: string | undefined;
@@ -244,23 +38,11 @@ export async function generateQr(
           const result = e.target?.result;
           if (typeof result === "string") {
             resolve(result.split(",")[1]);
-            console.log(
-              "[DEBUG] FileReader finished at",
-              new Date().toISOString(),
-              "for image",
-              image.name,
-            );
           } else {
             reject(new Error("Failed to read image"));
           }
         };
         reader.onerror = () => reject(new Error("Failed to read image"));
-        console.log(
-          "[DEBUG] FileReader start at",
-          new Date().toISOString(),
-          "for image",
-          image.name,
-        );
         reader.readAsDataURL(image);
       });
     }
