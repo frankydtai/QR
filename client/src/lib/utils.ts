@@ -6,6 +6,182 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// ============================================================================
+// WASM Dynamic Loader
+// ============================================================================
+
+interface WasmConfig {
+  name: string;
+  path: string;
+  globalFunction: string;
+  execJsPath?: string;
+}
+
+interface WasmModuleState {
+  loading: Promise<void> | null;
+  loaded: boolean;
+  error: Error | null;
+}
+
+// Track all WASM modules
+const wasmStates = new Map<string, WasmModuleState>();
+let wasmExecLoaded = false;
+let wasmExecLoading: Promise<void> | null = null;
+
+// Robust export readiness check with polling
+async function waitForExport(
+  functionName: string,
+  timeout = 1000,
+  pollInterval = 20
+): Promise<void> {
+  const start = Date.now();
+  while (!(window as any)[functionName]) {
+    if (Date.now() - start > timeout) {
+      throw new Error(
+        `Timeout: ${functionName} not available after ${timeout}ms`
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  }
+}
+
+// Load wasm_exec.js once (single-flight, idempotent)
+async function ensureWasmExec(
+  execJsPath: string = "/wasm_exec.js"
+): Promise<void> {
+  if (wasmExecLoaded) return;
+
+  if (wasmExecLoading) {
+    return wasmExecLoading;
+  }
+
+  wasmExecLoading = new Promise<void>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = execJsPath;
+    script.onload = () => {
+      wasmExecLoaded = true;
+      wasmExecLoading = null;
+      resolve();
+    };
+    script.onerror = () => {
+      wasmExecLoading = null;
+      reject(new Error(`Failed to load ${execJsPath}`));
+    };
+    // TODO: For future CSP compliance, may need nonce attribute
+    document.head.appendChild(script);
+  });
+
+  return wasmExecLoading;
+}
+
+// Load WASM with all safeguards
+export async function loadWasm(
+  config: WasmConfig,
+  options?: { signal?: AbortSignal }
+): Promise<void> {
+  const state = wasmStates.get(config.name) || {
+    loading: null,
+    loaded: false,
+    error: null,
+  };
+
+  // Already loaded successfully
+  if (state.loaded && (window as any)[config.globalFunction]) {
+    return;
+  }
+
+  // Currently loading - wait for it (concurrent load protection)
+  if (state.loading) {
+    return state.loading;
+  }
+
+  // Start new load
+  const loadingPromise = (async () => {
+    try {
+      // Ensure wasm_exec.js is loaded
+      await ensureWasmExec(config.execJsPath);
+
+      if (!window.Go) {
+        throw new Error("Go runtime not available after loading wasm_exec.js");
+      }
+
+      // Create new Go instance for this WASM (isolated runtime)
+      const go = new window.Go();
+
+      // Try instantiateStreaming first (faster), fallback to fetch
+      let wasmModule: WebAssembly.WebAssemblyInstantiatedSource;
+
+      try {
+        wasmModule = await WebAssembly.instantiateStreaming(
+          fetch(config.path, { signal: options?.signal }),
+          go.importObject
+        );
+      } catch (streamError) {
+        console.warn(
+          `instantiateStreaming failed for ${config.name}, using fallback:`,
+          streamError
+        );
+
+        const response = await fetch(config.path, { signal: options?.signal });
+        const bytes = await response.arrayBuffer();
+        wasmModule = await WebAssembly.instantiate(bytes, go.importObject);
+      }
+
+      // Run the Go program (non-blocking)
+      go.run(wasmModule.instance);
+
+      // Wait for export with polling (safe for slow devices)
+      await waitForExport(config.globalFunction, 1000, 20);
+
+      state.loaded = true;
+      state.error = null;
+    } catch (error) {
+      // Handle abort separately
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log(`WASM load aborted: ${config.name}`);
+      }
+      state.error = error instanceof Error ? error : new Error(String(error));
+      state.loaded = false;
+      throw state.error;
+    } finally {
+      state.loading = null;
+    }
+  })();
+
+  state.loading = loadingPromise;
+  wasmStates.set(config.name, state);
+
+  return loadingPromise;
+}
+
+// Retry failed load
+export async function retryWasmLoad(
+  wasmName: string,
+  config: WasmConfig
+): Promise<void> {
+  const state = wasmStates.get(wasmName);
+  if (state) {
+    state.loaded = false;
+    state.error = null;
+    state.loading = null;
+  }
+  return loadWasm(config);
+}
+
+// Idempotent preload helper (for mobile optimization)
+export function preloadWasm(config: WasmConfig): void {
+  const state = wasmStates.get(config.name);
+  if (state?.loaded || state?.loading) return; // No-op if already done/in-progress
+
+  loadWasm(config).catch((err) => {
+    console.error(`Failed to preload ${config.name}:`, err);
+  });
+}
+
+// ============================================================================
+// QR Generation
+// ============================================================================
+
 interface QROptions {
   colorHalftone?: boolean;
   noHalftone?: boolean;
@@ -16,17 +192,20 @@ interface QROptions {
 export async function generateQr(
   url: string,
   image?: File | null,
-  opts?: QROptions, // 一個物件，外部傳入
-  //opts?: { colorHalftone?: boolean }, // ← 新增：第三个可选参数
-  //opts?: { noHalftone?: boolean }, // ← 新增：第三个可选参数
+  opts?: QROptions,
 ): Promise<string> {
   if (!url) return "";
 
   try {
+    // Dynamically load goqr.wasm on demand
+    await loadWasm({
+      name: "goqr",
+      path: "/goqr.wasm",
+      globalFunction: "generateQRCode",
+    });
+
     if (!window.generateQRCode) {
-      throw new Error(
-        "WASM QR code generator not loaded yet. Please refresh the page.",
-      );
+      throw new Error("QR code generator failed to load");
     }
 
     let halftoneImage: string | undefined;
