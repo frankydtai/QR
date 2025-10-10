@@ -79,7 +79,7 @@ function QRCodeApp() {
 
   const handleStyleSelect = (style: QRStyle) => {
     setSelectedStyle(style);
-    setIsColor(["2", "4"].includes(style.id));
+    setIsColor(["2", "4", "6"].includes(style.id));
     setIsNo(["4"].includes(style.id));
     setIsDiffuse(["3"].includes(style.id));
   };

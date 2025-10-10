@@ -39,6 +39,18 @@ const qrStyles: QRStyle[] = [
     preview: Go,
     //description: 'Colorful gradient design'
   },
+  {
+    id: "5",
+    name: "5",
+    preview: Go,
+    //description: 'Colorful gradient design'
+  },
+  {
+    id: "6",
+    name: "6",
+    preview: Go,
+    //description: 'Colorful gradient design'
+  },
 ];
 
 interface QRModelSelectorProps {
