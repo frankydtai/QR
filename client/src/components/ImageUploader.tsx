@@ -311,8 +311,7 @@ export default function ImageUploader({
               <div className="relative">
                 {/* Image Edit Box */}
                 <div
-                  //className="aspect-square w-80 mx-auto mb-4 overflow-hidden rounded-lg border-2 border-dashed border-white/30 relative bg-white/5"
-                  className="aspect-square w-64 mx-auto mb-4 overflow-hidden rounded-lg relative bg-white/5"
+                  className="aspect-square w-64 mx-auto mb-4 overflow-hidden rounded-lg border-2 border-dashed border-white/30 relative bg-white/5"
                   onMouseMove={(e) => {
                     handleMouseMove(e);
                     handleTextMouseMove(e);

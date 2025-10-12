@@ -353,14 +353,14 @@ function QRCodeApp() {
   };
 
   return (
-    <div className="min-h-screen">
-      {/* 这里可放进度条/主题切换等 UI */}
-      {/* <ThemeToggle /> */}
-      {/* <ProgressIndicator current={currentStep} labels={stepLabels} /> */}
-
-      <main className="pt-12 pb-6">
-        <div className="px-4">{renderCurrentStep()}</div>
-      </main>
+    <div className="fixed inset-0 flex items-center justify-center bg-background overflow-hidden">
+      <div className="w-full h-full max-w-[768px] max-h-screen flex flex-col overflow-hidden">
+        <main className="flex-1 flex flex-col overflow-hidden">
+          <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6">
+            {renderCurrentStep()}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
