@@ -62,6 +62,13 @@ npm run start  # Start production server
 
 ## Recent Changes
 
+- **2025-10-12**: Responsive Layout Refactoring
+  - Implemented mobile-first responsive container with no scrolling on mobile screens
+  - Constrained layout to max-width of 768px (tablet size)
+  - Centered content on desktop with gradient background visible on sides
+  - Fixed viewport to prevent any horizontal or vertical scrolling
+  - Elements maintain consistent relative positions across all screen sizes
+
 - **2025-09-30**: Initial project setup
   - Configured Vite to serve WASM files from client/public directory
   - Added WASM loader script to index.html
