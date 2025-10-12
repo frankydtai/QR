@@ -355,10 +355,8 @@ function QRCodeApp() {
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-background overflow-hidden">
       <div className="w-full h-full max-w-[768px] max-h-screen flex flex-col overflow-hidden">
-        <main className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 flex flex-col overflow-y-auto px-4 py-6">
-            {renderCurrentStep()}
-          </div>
+        <main className="flex-1 flex flex-col overflow-hidden px-4 py-6">
+          {renderCurrentStep()}
         </main>
       </div>
     </div>
