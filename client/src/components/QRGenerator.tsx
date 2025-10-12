@@ -20,6 +20,7 @@ declare global {
   }
   interface Window {
     generateQRCode?: (content: string, options?: any) => GenResult;
+    generateQart?: (content: string, options?: any) => GenResult;
   }
 }
 

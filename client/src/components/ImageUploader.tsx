@@ -307,11 +307,12 @@ export default function ImageUploader({
           </Card>
         ) : (
           <div className="space-y-4">
-            <Card className="p-4 bg-white/10 backdrop-blur-sm border border-white/20">
+            <div className="p-4">
               <div className="relative">
                 {/* Image Edit Box */}
                 <div
-                  className="aspect-square w-64 mx-auto mb-4 overflow-hidden rounded-lg border-2 border-dashed border-white/30 relative bg-white/5"
+                  //className="aspect-square w-80 mx-auto mb-4 overflow-hidden rounded-lg border-2 border-dashed border-white/30 relative bg-white/5"
+                  className="aspect-square w-64 mx-auto mb-4 overflow-hidden rounded-lg relative bg-white/5"
                   onMouseMove={(e) => {
                     handleMouseMove(e);
                     handleTextMouseMove(e);
@@ -477,7 +478,7 @@ export default function ImageUploader({
                   {selectedImage && (selectedImage.size / 1024).toFixed(1)} KB
                 </p>
               </div> */}
-            </Card>
+            </div>
           </div>
         )}
 

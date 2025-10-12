@@ -305,6 +305,7 @@ function QRCodeApp() {
           />
         );
       case 3: // Preview（新增页面：去背/亮度/对比与 QR 生成）
+        console.log("[NAV] Rendering Step 3: PreviewPage");
         return (
           <PreviewPage
             onContinue={goToNextStep} // ★ 替换

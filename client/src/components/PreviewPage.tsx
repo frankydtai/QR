@@ -60,6 +60,7 @@ export default function PreviewPage({
   isDiffuse,
   setisRB,
 }: Props) {
+  console.log("[PreviewPage] mounted/rendered");
   const [isProcessing, setIsProcessing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const inFlightRef = useRef(false); // ← 新增這行

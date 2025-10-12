@@ -76,6 +76,7 @@ The WASM module is loaded on page load via the `wasm_exec.js` script and exposes
 
 ```javascript
 generateQRCode(content, options)
+generateQart(content, options)
 ```
 
 **Parameters:**

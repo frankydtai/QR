@@ -24,6 +24,7 @@ export async function generateQr(
 
   try {
     if (!window.generateQRCode) {
+      console.error("[GEN][QART] window.generateQart is not defined");
       throw new Error(
         "WASM QR code generator not loaded yet. Please refresh the page.",
       );
@@ -68,17 +69,31 @@ export async function generateQr(
     if (halftoneImage) {
       options.halftoneBase64 = halftoneImage;
     }
-
+    console.debug("[GEN][QART] calling generateQart", {
+      url,
+      optionKeys: Object.keys(options),
+      hasHalftone: !!options.halftoneBase64,
+    });
     const result = window.generateQRCode(url, options);
+    console.debug("[GEN][QART] returned", {
+      type: typeof result,
+      keys: result && Object.keys(result),
+    });
 
     if (!result || result.success === false) {
+      console.error("[GEN][QART] generation failed", result);
       throw new Error(result?.error || "QR generation failed");
     }
 
     if (result.base64EncodedImage) {
+      console.debug(
+        "[GEN][QART] got image, length:",
+        result.base64EncodedImage.length,
+      );
       const base64Image = `data:image/png;base64,${result.base64EncodedImage}`;
       return base64Image;
     } else {
+      console.error("[GEN][QART] no base64EncodedImage in result", result);
       throw new Error("No image returned from QR code generator");
     }
   } catch (err) {
