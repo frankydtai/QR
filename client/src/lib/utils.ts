@@ -10,7 +10,7 @@ interface QROptions {
   colorHalftone?: boolean;
   noHalftone?: boolean;
   diffuse?: boolean;
-  // 之後還可以再加其他選項
+  engine?: string; // ← 新增這一行
 }
 
 export async function generateQr(
@@ -21,9 +21,10 @@ export async function generateQr(
   //opts?: { noHalftone?: boolean }, // ← 新增：第三个可选参数
 ): Promise<string> {
   if (!url) return "";
+  console.log("[DEBUG] opts.engine =", opts?.engine);
 
   try {
-    if (!window.generateQRCode) {
+    if (!window.generateQart) {
       console.error("[GEN][QART] window.generateQart is not defined");
       throw new Error(
         "WASM QR code generator not loaded yet. Please refresh the page.",
@@ -50,7 +51,7 @@ export async function generateQr(
 
     const options: any = {
       // encodeOption
-      encodeVersion: 7, // 0 = let library choose
+      encodeVersion: 4, // 0 = let library choose
       encodeMode: 0, // 0=auto (可先不傳也行)
       encodeECLevel: "H",
       // outputOption
@@ -74,28 +75,34 @@ export async function generateQr(
       optionKeys: Object.keys(options),
       hasHalftone: !!options.halftoneBase64,
     });
-    const result = window.generateQRCode(url, options);
-    console.debug("[GEN][QART] returned", {
-      type: typeof result,
-      keys: result && Object.keys(result),
-    });
-
-    if (!result || result.success === false) {
-      console.error("[GEN][QART] generation failed", result);
-      throw new Error(result?.error || "QR generation failed");
-    }
-
-    if (result.base64EncodedImage) {
-      console.debug(
-        "[GEN][QART] got image, length:",
-        result.base64EncodedImage.length,
-      );
+    if (opts?.engine === "goqr") {
+      const result = window.generateQRCode(url, options);
       const base64Image = `data:image/png;base64,${result.base64EncodedImage}`;
       return base64Image;
-    } else {
-      console.error("[GEN][QART] no base64EncodedImage in result", result);
-      throw new Error("No image returned from QR code generator");
+    } else if (opts?.engine === "qart") {
+      const result = window.generateQart(url, options);
+      const base64Image = `data:image/png;base64,${result.base64EncodedImage}`;
+      return base64Image;
     }
+    // console.debug("[GEN][QART] returned", {
+    //   type: typeof result,
+    //   keys: result && Object.keys(result),
+    // });
+
+    // if (!result || result.success === false) {
+    //   console.error("[GEN][QART] generation failed", result);
+    //   throw new Error(result?.error || "QR generation failed");
+    // }
+
+    // if (result.base64EncodedImage) {
+    //   console.debug(
+    //     "[GEN][QART] got image, length:",
+    //     result.base64EncodedImage.length,
+    //   );
+    // } else {
+    //   console.error("[GEN][QART] no base64EncodedImage in result", result);
+    //   throw new Error("No image returned from QR code generator");
+    // }
   } catch (err) {
     const errorMessage =
       err instanceof Error ? err.message : "Failed to generate QR code";
@@ -155,17 +162,17 @@ export async function crop(
   imageScale: number,
   fitScale: number,
   textBoxes: { id: number; x: number; y: number; text: string }[],
-  //containerRef?: RefObject<HTMLDivElement> | null, // ★ 允許 null/省略
+  containerRef?: RefObject<HTMLDivElement> | null, // ★ 允許 null/省略
 ): Promise<File> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
-      // const box = containerRef?.current?.getBoundingClientRect();
-      // const bw = Math.round(box?.width ?? 256);
-      // const bh = Math.round(box?.height ?? 256);
-      const bw = 256;
-      const bh = 256;
+      const box = containerRef?.current?.getBoundingClientRect();
+      const bw = Math.round(box?.width ?? 256);
+      const bh = Math.round(box?.height ?? 256);
+      //const bw = 256;
+      //const bh = 256;
       const dpr = window.devicePixelRatio || 1;
 
       const canvas = document.createElement("canvas");

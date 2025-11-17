@@ -62,6 +62,7 @@ function QRCodeApp() {
   const [isColor, setIsColor] = useState<boolean>(false);
   const [isNo, setIsNo] = useState<boolean>(false);
   const [isDiffuse, setIsDiffuse] = useState<boolean>(false);
+  const [engine, setEngine] = useState<"goqr" | "qart">("goqr");
   // Edit 页使用的原图及几何/文字等编辑状态
   const [imageEditState, setImageEditState] = useState<ImageEditState>({
     imageURL: null,
@@ -82,6 +83,7 @@ function QRCodeApp() {
     setIsColor(["2", "4", "6"].includes(style.id));
     setIsNo(["4"].includes(style.id));
     setIsDiffuse(["3"].includes(style.id));
+    setEngine(["5", "6"].includes(style.id) ? "qart" : "goqr");
   };
 
   const handleImageSelect = async (file: File | null) => {
@@ -194,7 +196,12 @@ function QRCodeApp() {
         const qrBase64 = await generateQr(
           url || "https://instagram.com",
           filtered,
-          { colorHalftone: isColor, noHalftone: isNo, diffuse: isDiffuse },
+          {
+            colorHalftone: isColor,
+            noHalftone: isNo,
+            diffuse: isDiffuse,
+            engine,
+          },
         );
         setPreviewQR(qrBase64);
 
@@ -302,6 +309,7 @@ function QRCodeApp() {
             setSelectedImageRB={setSelectedImageRB}
             isNo={isNo}
             isDiffuse={isDiffuse}
+            engine={engine}
           />
         );
       case 3: // Preview（新增页面：去背/亮度/对比与 QR 生成）
@@ -328,6 +336,7 @@ function QRCodeApp() {
             isColor={isColor}
             isNo={isNo}
             isDiffuse={isDiffuse}
+            engine={engine}
           />
         );
       case 4: // URL

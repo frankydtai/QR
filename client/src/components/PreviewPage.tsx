@@ -36,6 +36,7 @@ type Props = {
   isColor: boolean;
   isNo: boolean;
   isDiffuse: boolean;
+  engine: string;
   setisRB: (v: boolean) => void;
 };
 
@@ -58,6 +59,7 @@ export default function PreviewPage({
   isColor,
   isNo,
   isDiffuse,
+  engine,
   setisRB,
 }: Props) {
   console.log("[PreviewPage] mounted/rendered");
@@ -136,6 +138,7 @@ export default function PreviewPage({
       colorHalftone: isColor,
       noHalftone: isNo,
       diffuse: isDiffuse,
+      engine,
     });
     setPreviewQR(base64Image);
     inFlightRef.current = false; // ← 新增：釋放
@@ -177,7 +180,12 @@ export default function PreviewPage({
       const base64Image = await generateQr(
         "https://instagram.com",
         filteredImage,
-        { colorHalftone: isColor, noHalftone: isNo, diffuse: isDiffuse },
+        {
+          colorHalftone: isColor,
+          noHalftone: isNo,
+          diffuse: isDiffuse,
+          engine,
+        },
       );
 
       setPreviewQR(base64Image);
@@ -209,7 +217,12 @@ export default function PreviewPage({
       const base64Image = await generateQr(
         "https://instagram.com",
         filteredImage,
-        { colorHalftone: isColor, noHalftone: isNo, diffuse: isDiffuse },
+        {
+          colorHalftone: isColor,
+          noHalftone: isNo,
+          diffuse: isDiffuse,
+          engine,
+        },
       );
 
       setPreviewQR(base64Image);
@@ -222,107 +235,119 @@ export default function PreviewPage({
   };
 
   return (
-    <div className="w-full max-w-md mx-auto p-6">
-      <button
-        onClick={onBack}
-        className="mb-6 text-white/80 hover:text-white transition-colors"
-        data-testid="button-back"
-      >
-        ← Back
-      </button>
-
-      {/* 去掉外层多余边框：border-0 */}
-      <Card className="p-5 bg-white/10 backdrop-blur-sm border-0">
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-white text-center">
+    <div className="w-full h-full overflow-hidden flex flex-col items-center justify-between bg-transparent">
+      {/* Header */}
+      <header className="w-full relative px-4 pt-4">
+        <button
+          onClick={onBack}
+          className="absolute left-4 top-4 text-white/80 hover:text-white transition-colors"
+          data-testid="button-back"
+        >
+          ← Back
+        </button>
+        <div className="text-center">
+          <h1
+            className="text-2xl font-light text-white"
+            data-testid="page-title"
+          >
             Preview
-          </h2>
+          </h1>
+        </div>
+      </header>
 
-          <div
-            ref={containerRef}
-            className="aspect-square w-64 mx-auto overflow-hidden rounded-lg border-2 border-dashed border-white/30 relative bg-white/5"
-          >
-            {previewQR ? (
-              <img
-                src={previewQR}
-                alt="Preview QR"
-                className="absolute inset-0 w-full h-full object-contain"
-              />
-            ) : (
-              <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm">
-                No preview yet
-              </div>
-            )}
-          </div>
-
-          {/* Brightness Slider */}
-          <div className="space-y-2 mb-4">
-            <Label className="text-white/80 text-sm">Brightness</Label>
-            <Slider
-              value={[brightness]}
-              onValueChange={(value: number[]) => {
-                updateState({ brightness: value[0] ?? 0 });
-              }}
-              onValueCommit={() => {
-                scheduleRecompute(); // ★ 新增：放開滑桿後再重算
-              }}
-              min={-100}
-              max={100}
-              step={10}
-              className="w-full"
-              data-testid="slider-brightness"
-            />
-            <div className="text-center text-white/60 text-xs">
-              {brightness > 0 ? "+" : ""}
-              {brightness}
-            </div>
-          </div>
-
-          {/* Contrast Slider */}
-          <div className="space-y-2 mb-4">
-            <Label className="text-white/80 text-sm">Contrast</Label>
-            <Slider
-              value={[contrast]}
-              onValueChange={(value: number[]) => {
-                updateState({ contrast: value[0] ?? 0 });
-              }}
-              onValueCommit={() => {
-                scheduleRecompute(); // ★ 新增：放開滑桿後再重算
-              }}
-              min={-100}
-              max={100}
-              step={10}
-              className="w-full"
-              data-testid="slider-contrast"
-            />
-            <div className="text-center text-white/60 text-xs">
-              {contrast > 0 ? "+" : ""}
-              {contrast}
-            </div>
-          </div>
-
-          {/* Remove Background Button */}
-          <Button
-            variant="outline"
-            onClick={isRB ? handleRestoreBackground : handleRemoveBackground}
-            disabled={isProcessing}
-            className="w-full mb-4 bg-white/10 border-white/30 text-white hover:bg-white/20"
-            data-testid="button-remove-bg"
-          >
-            {isRB ? "Restore Background" : "Remove Background"}
-          </Button>
-
-          <div className="pt-2">
-            <Button
-              className="w-full h-12 bg-white/20 border border-white/30 text-white hover:bg-white/30 rounded-md"
-              onClick={onContinue}
-              data-testid="button-continue"
+      {/* Main */}
+      <main className="flex-1 w-full flex items-center justify-center px-4">
+        <div className="w-full max-w-[420px]">
+          <div className="space-y-4">
+            {/* 預覽框：沿用方形虛線框的風格 */}
+            <div
+              ref={containerRef}
+              className="aspect-square w-full overflow-hidden rounded-lg border-2 border-dashed border-white/30 relative bg-white/5"
+              data-testid="preview-box"
             >
-              Continue
+              {previewQR ? (
+                <img
+                  src={previewQR}
+                  alt="Preview QR"
+                  className="absolute inset-0 w-full h-full object-contain"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm">
+                  No preview yet
+                </div>
+              )}
+            </div>
+
+            {/* Brightness */}
+            <div className="space-y-2">
+              <Label className="text-white/80 text-sm">Brightness</Label>
+              <Slider
+                value={[brightness]}
+                onValueChange={(value: number[]) => {
+                  updateState({ brightness: value[0] ?? 0 });
+                }}
+                onValueCommit={() => {
+                  scheduleRecompute();
+                }}
+                min={-100}
+                max={100}
+                step={10}
+                className="w-full"
+                data-testid="slider-brightness"
+              />
+              <div className="text-center text-white/60 text-xs">
+                {brightness > 0 ? "+" : ""}
+                {brightness}
+              </div>
+            </div>
+
+            {/* Contrast */}
+            <div className="space-y-2">
+              <Label className="text-white/80 text-sm">Contrast</Label>
+              <Slider
+                value={[contrast]}
+                onValueChange={(value: number[]) => {
+                  updateState({ contrast: value[0] ?? 0 });
+                }}
+                onValueCommit={() => {
+                  scheduleRecompute();
+                }}
+                min={-100}
+                max={100}
+                step={10}
+                className="w-full"
+                data-testid="slider-contrast"
+              />
+              <div className="text-center text-white/60 text-xs">
+                {contrast > 0 ? "+" : ""}
+                {contrast}
+              </div>
+            </div>
+
+            {/* Remove/Restore Background */}
+            <Button
+              variant="outline"
+              onClick={isRB ? handleRestoreBackground : handleRemoveBackground}
+              disabled={isProcessing}
+              className="w-full bg-white/10 border-white/30 text-white hover:bg-white/20"
+              data-testid="button-remove-bg"
+            >
+              {isRB ? "Restore Background" : "Remove Background"}
             </Button>
           </div>
         </div>
-      </Card>
+      </main>
+
+      {/* Footer */}
+      <footer className="w-full px-4 pb-4">
+        <Button
+          className="block mx-auto w-full max-w-[420px] h-12 bg-white/20 border border-white/30 text-white hover:bg-white/30 rounded-md"
+          onClick={onContinue}
+          data-testid="button-continue"
+        >
+          Continue
+        </Button>
+      </footer>
     </div>
   );
 }

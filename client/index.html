@@ -36,10 +36,11 @@
         );
         go1.run(result1.instance);
         console.log("goqr.wasm loaded");
-      })();
-
-      // load qart.wasm
-      (async () => {
+        console.log(
+          "[BOOT][QART] go.run done; typeof window.generateQart =",
+          typeof window.generateQRCode,
+        );
+      
         try {
           const go2 = new Go();
           const result2 = await WebAssembly.instantiateStreaming(
